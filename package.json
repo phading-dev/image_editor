@@ -1,0 +1,25 @@
+{
+  "name": "image_editor",
+  "version": "0.0.1",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phading-dev/image_editor.git"
+  },
+  "author": "Yuxuan Xie <ykuyo.dev@gmail.com>",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/phading-dev/image_editor/issues"
+  },
+  "homepage": "https://github.com/phading-dev/image_editor#readme",
+  "devDependencies": {
+    "@selfage/bundler_cli": "^5.7.2",
+    "@selfage/cli": "^5.0.3",
+    "@selfage/generator_cli": "^4.4.12",
+    "@selfage/tsconfig": "^1.1.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "backend",
+  "version": "0.0.1",
+  "private": true,
+  "dependencies": {
+    "@google-cloud/storage": "^7.17.3",
+    "@google-cloud/vertexai": "^1.10.0",
+    "@selfage/http_error": "^1.1.2",
+    "@selfage/service_handler": "^7.5.6",
+    "express": "^5.1.0",
+    "express-static-gzip": "^3.0.0",
+    "get-stream": "^6.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.5"
+  }
+}

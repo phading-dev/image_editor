@@ -1,0 +1,40 @@
+- kind: Service
+  name: VertexGeminiService
+  path: /vertexGemini
+- kind: Message
+  name: GenerateContentRequestBody
+  fields:
+    - name: model
+      type: string
+      index: 1
+    - name: contentsJson
+      type: string
+      index: 2
+    - name: systemInstructionJson
+      type: string
+      index: 3
+    - name: generationConfigJson
+      type: string
+      index: 4
+    - name: safetySettingsJson
+      type: string
+      index: 5
+    - name: cachedContentName
+      type: string
+      index: 6
+- kind: Message
+  name: GenerateContentResponse
+  fields:
+    - name: responseJson
+      type: string
+      index: 1
+- kind: RemoteCallsGroup
+  name: VertexGeminiRemoteCalls
+  service: VertexGeminiService
+  calls:
+    - name: GenerateContent
+      path: /GenerateContent
+      body: GenerateContentRequestBody
+      response: GenerateContentResponse
+  outputClient: ./service_interface/client
+  outputHandler: ./service_interface/handler
