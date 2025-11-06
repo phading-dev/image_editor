@@ -1,0 +1,55 @@
+- kind: Message
+  name: Transform
+  fields:
+    - name: translateX
+      type: number
+      index: 1
+    - name: translateY
+      type: number
+      index: 2
+    - name: scaleX
+      type: number
+      index: 3
+    - name: scaleY
+      type: number
+      index: 4
+    - name: rotation
+      type: number
+      index: 5
+- kind: Message
+  name: Layer
+  fields:
+    - name: id
+      type: string
+      index: 1
+    - name: name
+      type: string
+      index: 2
+    - name: visible
+      type: boolean
+      index: 3
+    - name: opacity
+      type: number
+      index: 4
+    - name: locked
+      type: boolean
+      index: 5
+    - name: width
+      type: number
+      index: 7
+    - name: height
+      type: number
+      index: 8
+    - name: transform
+      type: Transform
+      index: 6
+- kind: Message
+  name: Project
+  fields:
+    - name: name
+      type: string
+      index: 1
+    - name: layers
+      type: Layer
+      isArray: true
+      index: 2

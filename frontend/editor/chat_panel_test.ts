@@ -1,5 +1,5 @@
-import { GENERATE_CONTENT_REQUEST_BODY } from "../../../service_interface/interface";
-import { normalizeBody } from "../../normalize_body";
+import { GENERATE_CONTENT_REQUEST_BODY } from "../../service_interface/interface";
+import { normalizeBody } from "../normalize_body";
 import { ChatPanel } from "./chat_panel";
 import { eqMessage } from "@selfage/message/test_matcher";
 import { keyboardDown, keyboardType, keyboardUp, setViewport } from "@selfage/puppeteer_test_executor_api";

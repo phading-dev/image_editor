@@ -1,10 +1,10 @@
 import EventEmitter = require("events");
-import { ENV_VARS } from "../../../env_vars";
-import { newGenerateContentRequest } from "../../../service_interface/client";
-import { GenerateContentResponse } from "../../../service_interface/interface";
-import { COLOR_THEME } from "../../color_theme";
-import { SERVICE_CLIENT } from "../../service_client";
-import { FONT_M } from "../../sizes";
+import { ENV_VARS } from "../../env_vars";
+import { newGenerateContentRequest } from "../../service_interface/client";
+import { GenerateContentResponse } from "../../service_interface/interface";
+import { COLOR_THEME } from "../color_theme";
+import { SERVICE_CLIENT } from "../service_client";
+import { FONT_M } from "../sizes";
 import { E } from "@selfage/element/factory";
 import { Ref } from "@selfage/ref";
 import { WebServiceClient } from "@selfage/web_service_client/client";
@@ -51,7 +51,6 @@ export class ChatPanel extends EventEmitter {
           "padding:1rem",
           "box-sizing:border-box",
           "gap:0.75rem",
-          `border-right:0.0625rem solid ${COLOR_THEME.neutral2}`,
         ].join(";"),
       },
       E.div({
