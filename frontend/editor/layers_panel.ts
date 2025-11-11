@@ -1,7 +1,8 @@
 import EventEmitter = require("events");
 import { COLOR_THEME } from "../color_theme";
 import { FONT_S } from "../sizes";
-import { Layer, Project } from "./project";
+import { Project } from "./project";
+import { Layer } from "./project_metadata";
 import { E } from "@selfage/element/factory";
 import { Ref } from "@selfage/ref";
 
@@ -155,25 +156,29 @@ export class LayerRow extends EventEmitter {
 }
 
 export interface LayersPanel {
-  on(event: "rerender", listener: () => void): this;
+  on(
+    event: "reorder",
+    listener: (oldIndex: number, newIndex: number) => void,
+  ): this;
 }
 
 export class LayersPanel extends EventEmitter {
+  public static create(project: Project): LayersPanel {
+    return new LayersPanel(project);
+  }
+
   public element: HTMLElement;
   private listContainer: HTMLDivElement;
   private emptyState: HTMLDivElement;
-  public layerRows: Array<LayerRow> = [];
-  private draggingRow?: LayerRow;
-  public selectedLayerRows: Set<LayerRow> = new Set();
-  public get getSelectedLayerIds(): Array<string> {
-    return Array.from(this.selectedLayerRows).map((row) => row.id);
-  }
-  public get firstActiveSelectedLayerId(): string {
-    for (let row of this.selectedLayerRows) {
-      return row.id;
+  public layerRows = new Map<string, LayerRow>();
+  public selectedLayerIds: Set<string> = new Set();
+  public get activeLayerId(): string {
+    for (let id of this.selectedLayerIds) {
+      return id;
     }
     return undefined;
   }
+  private draggingRow?: LayerRow;
 
   public constructor(private project: Project) {
     super();
@@ -184,6 +189,7 @@ export class LayersPanel extends EventEmitter {
       {
         class: "layers-panel",
         style: [
+          "flex:0 0 auto",
           "height:100%",
           "display:flex",
           "flex-direction:column",
@@ -237,63 +243,54 @@ export class LayersPanel extends EventEmitter {
     this.listContainer = listRef.val;
     this.emptyState = emptyRef.val;
 
-    this.listContainer.addEventListener("dragover", (event) => {
-      if (!this.draggingRow) {
-        return;
-      }
-      event.preventDefault();
-    });
-    this.listContainer.addEventListener("drop", (event) => {
-      if (!this.draggingRow) {
-        return;
-      }
-      event.preventDefault();
-      this.moveRowBefore(this.draggingRow);
-    });
-
-    for (let index = 0; index < project.layers.length; index++) {
-      let row = this.createLayer(project.layers[index]).setSelected(false);
+    for (let index = 0; index < project.metadata.layers.length; index++) {
+      let row = this.createLayerRow(project.metadata.layers[index]).setSelected(
+        false,
+      );
       this.listContainer.appendChild(row.element);
-      this.layerRows.push(row);
     }
     this.updateEmptyState();
+    this.setupListContainerDragHandlers();
   }
 
-  private createLayer(layer: Layer): LayerRow {
+  private createLayerRow(layer: Layer): LayerRow {
     let row = new LayerRow(layer);
     this.setupRowClickHandlers(row);
     this.setupRowDragHandlers(row);
+    this.layerRows.set(row.id, row);
     return row;
   }
 
-  // No event emitted for this action
-  public addLayer(layer: Layer): void {
-    let row = this.createLayer(layer);
-    this.listContainer.insertBefore(row.element, this.layerRows[0]?.element);
-    this.layerRows.unshift(row);
+  public addLayerRow(layer: Layer): void {
+    let row = this.createLayerRow(layer);
+    this.emptyState.after(row.element);
+    this.layerRows.set(row.id, row);
     this.selectExclusiveLayer(row);
     this.emptyState.style.display = "none";
   }
 
-  // No event emitted for this action
-  public deleteSelectedLayers(): void {
-    for (let row of this.selectedLayerRows) {
-      row.remove();
-      let index = this.layerRows.findIndex((r) => r === row);
-      this.layerRows.splice(index, 1);
-    }
-    this.selectedLayerRows.clear();
+  public deleteLayerRow(layerId: string): void {
+    let row = this.layerRows.get(layerId);
+    row.remove();
+    this.layerRows.delete(layerId);
+    this.selectedLayerIds.delete(layerId);
     this.updateEmptyState();
   }
 
+  public moveLayerRowBefore(layerId: string, beforeLayerId?: string): void {
+    let oldRow = this.layerRows.get(layerId);
+    let newRow = beforeLayerId ? this.layerRows.get(beforeLayerId) : undefined;
+    this.listContainer.insertBefore(oldRow.element, newRow?.element);
+  }
+
   private updateEmptyState(): void {
-    if (!this.layerRows.length) {
+    if (!this.project.metadata.layers.length) {
       this.emptyState.style.display = "block";
     } else {
-      if (!this.selectedLayerRows.size) {
-        let firstLayer = this.layerRows[0];
+      if (!this.selectedLayerIds.size) {
+        let firstLayer = this.layerRows.get(this.project.metadata.layers[0].id);
         firstLayer.setSelected(true);
-        this.selectedLayerRows.add(firstLayer);
+        this.selectedLayerIds.add(firstLayer.id);
       }
       this.emptyState.style.display = "none";
     }
@@ -304,39 +301,34 @@ export class LayersPanel extends EventEmitter {
       if (!event.shiftKey) {
         this.selectExclusiveLayer(row);
       } else {
-        let isSelected = this.selectedLayerRows.has(row);
+        let isSelected = this.selectedLayerIds.has(row.id);
         if (isSelected) {
-          if (this.selectedLayerRows.size === 1) {
+          if (this.selectedLayerIds.size === 1) {
             // Prevent deselecting the last selected layer
             return;
           }
           row.setSelected(false);
-          this.selectedLayerRows.delete(row);
+          this.selectedLayerIds.delete(row.id);
         } else {
           row.setSelected(true);
-          this.selectedLayerRows.add(row);
+          this.selectedLayerIds.add(row.id);
         }
       }
     });
   }
 
   private selectExclusiveLayer(row: LayerRow): void {
-    for (let layer of this.selectedLayerRows) {
-      layer.setSelected(false);
+    for (let id of this.selectedLayerIds) {
+      this.layerRows.get(id).setSelected(false);
     }
-    this.selectedLayerRows.clear();
+    this.selectedLayerIds.clear();
     row.setSelected(true);
-    this.selectedLayerRows.add(row);
+    this.selectedLayerIds.add(row.id);
   }
 
   private setupRowDragHandlers(row: LayerRow): void {
-    row.on("dragstart", (event) => {
-      console.log("dragstart", row.id);
+    row.on("dragstart", () => {
       this.draggingRow = row;
-      if (event.dataTransfer) {
-        // event.dataTransfer.effectAllowed = "move";
-        // event.dataTransfer.setData("text/plain", row.id ?? "");
-      }
     });
     row.on("dragend", () => {
       this.draggingRow = undefined;
@@ -353,38 +345,51 @@ export class LayersPanel extends EventEmitter {
       }
       event.preventDefault();
       event.stopPropagation();
-      let rect = row.element.getBoundingClientRect();
-      let beforeRow: LayerRow;
-      let dropBefore = event.clientY < rect.top + rect.height / 2;
-      if (dropBefore) {
-        beforeRow = row;
-      } else {
-        let beforeIndex = this.layerRows.indexOf(row) + 1;
-        beforeRow = this.layerRows[beforeIndex];
+      if (this.draggingRow === row) {
+        return;
       }
-      this.moveRowBefore(this.draggingRow, beforeRow);
+      let rect = row.element.getBoundingClientRect();
+      let newIndex = this.project.metadata.layers.findIndex(
+        (layer) => layer.id === row.id,
+      );
+      let dropBefore = event.clientY < rect.top + rect.height / 2;
+      if (!dropBefore) {
+        newIndex += 1;
+      }
+      let oldIndex = this.project.metadata.layers.findIndex(
+        (layer) => layer.id === this.draggingRow.id,
+      );
+      if (oldIndex < newIndex) {
+        newIndex -= 1;
+      }
+      if (oldIndex === newIndex) {
+        return;
+      }
+      this.emit("reorder", oldIndex, newIndex);
     });
   }
 
-  private moveRowBefore(row: LayerRow, beforeRow?: LayerRow): void {
-    if (row === beforeRow) {
-      return;
-    }
-    let currentIndex = this.layerRows.indexOf(row);
-    let currentLayer = this.project.layers[currentIndex];
-    this.layerRows.splice(currentIndex, 1);
-    this.project.layers.splice(currentIndex, 1);
-    if (beforeRow) {
-      let targetIndex = this.layerRows.indexOf(beforeRow);
-      this.layerRows.splice(targetIndex, 0, row);
-      this.project.layers.splice(targetIndex, 0, currentLayer);
-      this.listContainer.insertBefore(row.element, beforeRow.element);
-    } else {
-      this.layerRows.push(row);
-      this.project.layers.push(currentLayer);
-      this.listContainer.appendChild(row.element);
-    }
-    this.emit("rerender");
+  private setupListContainerDragHandlers(): void {
+    this.listContainer.addEventListener("dragover", (event) => {
+      if (!this.draggingRow) {
+        return;
+      }
+      event.preventDefault();
+    });
+    this.listContainer.addEventListener("drop", (event) => {
+      if (!this.draggingRow) {
+        return;
+      }
+      event.preventDefault();
+      let oldIndex = this.project.metadata.layers.findIndex(
+        (layer) => layer.id === this.draggingRow.id,
+      );
+      let newIndex = this.project.metadata.layers.length - 1;
+      if (oldIndex === newIndex) {
+        return;
+      }
+      this.emit("reorder", oldIndex, newIndex);
+    });
   }
 
   public remove(): void {

@@ -13,7 +13,7 @@
     - name: scaleY
       type: number
       index: 4
-    - name: rotation
+    - name: rotation # degrees
       type: number
       index: 5
 - kind: Message
@@ -44,12 +44,46 @@
       type: Transform
       index: 6
 - kind: Message
-  name: Project
+  name: PaintToolSettings
+  fields:
+    - name: brushSize
+      type: number
+      index: 1
+    - name: brushColor
+      type: string
+      index: 2
+    - name: strokeWidth
+      type: number
+      index: 3
+- kind: Message
+  name: ProjectSettings
+  fields:
+    - name: foregroundColor
+      type: string
+      index: 1
+    - name: backgroundColor
+      type: string
+      index: 2
+    - name: paintToolSettings
+      type: PaintToolSettings
+      index: 3
+- kind: Message
+  name: ProjectMetadata
   fields:
     - name: name
       type: string
       index: 1
+    - name: width
+      type: number
+      index: 2
+    - name: height
+      type: number
+      index: 3
     - name: layers
       type: Layer
       isArray: true
-      index: 2
+      index: 4
+    - name: settings
+      type: ProjectSettings
+      index: 5
+

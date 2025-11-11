@@ -43,13 +43,12 @@ export class ChatPanel extends EventEmitter {
       {
         class: "chat-panel",
         style: [
+          "flex:0 0 auto",
+          "height:100%",
           "display:flex",
           "flex-direction:column",
-          "height:100%",
           `background-color:${COLOR_THEME.neutral4}`,
           `color:${COLOR_THEME.neutral0}`,
-          "padding:1rem",
-          "box-sizing:border-box",
           "gap:0.75rem",
         ].join(";"),
       },
@@ -57,6 +56,8 @@ export class ChatPanel extends EventEmitter {
         ref: historyRef,
         class: "chat-panel__history",
         style: [
+          "padding: 1rem 0.75rem 0 0.75rem",
+          "box-sizing:border-box",
           "flex:1",
           "overflow-y:auto",
           "display:flex",
@@ -68,6 +69,8 @@ export class ChatPanel extends EventEmitter {
         {
           class: "chat-panel__input-row",
           style: [
+            "padding: 0 0.75rem 1rem 0.75rem",
+            "box-sizing:border-box",
             "display:flex",
             "gap:0.5rem",
             "align-items:flex-end",
@@ -80,7 +83,8 @@ export class ChatPanel extends EventEmitter {
           rows: "1",
           placeholder: "Type a prompt…",
           style: [
-            "flex:1",
+            "flex:1 0 0",
+            "min-width:0",
             `background-color:transparent`,
             `color:${COLOR_THEME.neutral0}`,
             `border:0.0625rem solid ${COLOR_THEME.neutral2}`,
@@ -272,13 +276,14 @@ export class ChatPanel extends EventEmitter {
     }
   }
 
-  public remove(): void {
-    this.element.remove();
-  }
-
   private adjustInputHeight(): void {
     this.input.style.height = "auto";
     // Minimum height: 1.4 line-height + 1.25rem padding + 0.125rem border
     this.input.style.height = `${Math.max(this.input.scrollHeight / 16, FONT_M * 1.4 + 1.25 + 0.125)}rem`;
+  }
+
+  public remove(): void {
+    this.element.remove();
+    this.removeAllListeners();
   }
 }

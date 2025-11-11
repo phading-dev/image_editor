@@ -1,6 +1,7 @@
 import { normalizeBody } from "../normalize_body";
 import { LayersPanel } from "./layers_panel";
-import { PROJECT, Project } from "./project";
+import { Project } from "./project";
+import { PROJECT_METADATA } from "./project_metadata";
 import { eqMessage } from "@selfage/message/test_matcher";
 import {
   mouseDown,
@@ -10,43 +11,48 @@ import {
 } from "@selfage/puppeteer_test_executor_api";
 import { TEST_RUNNER, TestCase } from "@selfage/puppeteer_test_runner/runner";
 import { asyncAssertScreenshot } from "@selfage/screenshot_test_matcher";
-import { assertThat } from "@selfage/test_matcher";
+import { assertThat, eq, isArray } from "@selfage/test_matcher";
 
 normalizeBody();
 
-const waitForLayout = () => {
+function waitForLayout() {
   document.body.offsetHeight; // Force layout
-};
+}
 
-const getRowRect = (panel: LayersPanel, index: number) =>
-  panel.layerRows[index].element.getBoundingClientRect();
+function getRowRect(panel: LayersPanel, project: Project, index: number) {
+  return panel.layerRows
+    .get(project.metadata.layers[index].id)
+    .element.getBoundingClientRect();
+}
 
-const getPointOnRow = (
+function getPointOnRow(
   panel: LayersPanel,
+  project: Project,
   index: number,
   verticalRatio: number,
-) => {
-  let rect = getRowRect(panel, index);
+) {
+  let rect = getRowRect(panel, project, index);
   return {
     x: Math.round(rect.left + rect.width / 2),
     y: Math.round(rect.top + rect.height * verticalRatio),
   };
-};
+}
 
-const getPointBelowRow = (panel: LayersPanel, index: number) => {
-  let rect = getRowRect(panel, index);
+function getPointBelowRow(panel: LayersPanel, project: Project, index: number) {
+  let rect = getRowRect(panel, project, index);
   return {
     x: Math.round(rect.left + rect.width / 2),
     y: Math.round(rect.bottom + 5),
   };
-};
+}
 
-const dragRowToPoint = async (
+async function dragRowToPoint(
   panel: LayersPanel,
+  project: Project,
   index: number,
   point: { x: number; y: number },
-) => {
-  let rect = getRowRect(panel, index);
+) {
+  let rect = getRowRect(panel, project, index);
   let startPoint = {
     x: Math.round(rect.left + rect.width / 2),
     y: Math.round(rect.top + rect.height / 2),
@@ -56,7 +62,19 @@ const dragRowToPoint = async (
   await mouseMove(point.x, point.y, 1);
   await mouseUp();
   await waitForLayout();
-};
+}
+
+function reorderAction(
+  project: Project,
+  oldIndex: number,
+  newIndex: number,
+  cut: LayersPanel,
+) {
+  let layer = project.metadata.layers.splice(oldIndex, 1)[0];
+  let beforeLayer = project.metadata.layers[newIndex];
+  project.metadata.layers.splice(newIndex, 0, layer);
+  cut.moveLayerRowBefore(layer.id, beforeLayer?.id);
+}
 
 TEST_RUNNER.run({
   name: "LayersPanelTest",
@@ -74,7 +92,7 @@ TEST_RUNNER.run({
       private cut: LayersPanel;
       public async execute() {
         // Arrange
-        this.cut = new LayersPanel({ layers: [] });
+        this.cut = new LayersPanel({ metadata: { layers: [] } });
 
         // Act
         await setViewport(400, 600);
@@ -96,35 +114,38 @@ TEST_RUNNER.run({
       private cut: LayersPanel;
       public async execute() {
         // Arrange
-        this.cut = new LayersPanel({
-          layers: [
-            {
-              id: "layer-4",
-              name: "This is a layer with a super long name that should test how the UI handles very lengthy layer names in the layers panel",
-            },
-            {
-              id: "layer-3",
-              name: "Foreground",
-              locked: false,
-              visible: true,
-              opacity: 10,
-            },
-            {
-              id: "layer-2",
-              name: "Midground",
-              locked: false,
-              visible: false,
-              opacity: 100,
-            },
-            {
-              id: "layer-1",
-              name: "Background",
-              locked: true,
-              visible: true,
-              opacity: 100,
-            },
-          ],
-        });
+        let project: Project = {
+          metadata: {
+            layers: [
+              {
+                id: "layer-4",
+                name: "This is a layer with a super long name that should test how the UI handles very lengthy layer names in the layers panel",
+              },
+              {
+                id: "layer-3",
+                name: "Foreground",
+                locked: false,
+                visible: true,
+                opacity: 10,
+              },
+              {
+                id: "layer-2",
+                name: "Midground",
+                locked: false,
+                visible: false,
+                opacity: 100,
+              },
+              {
+                id: "layer-1",
+                name: "Background",
+                locked: true,
+                visible: true,
+                opacity: 100,
+              },
+            ],
+          },
+        };
+        this.cut = new LayersPanel(project);
 
         // Act
         await setViewport(400, 600);
@@ -139,15 +160,22 @@ TEST_RUNNER.run({
 
         // Arrange
         const clickLayer = (index: number, shiftKey = false) => {
-          this.cut.layerRows[index].element.dispatchEvent(
-            new MouseEvent("click", { bubbles: true, shiftKey }),
-          );
+          this.cut.layerRows
+            .get(project.metadata.layers[index].id)
+            .element.dispatchEvent(
+              new MouseEvent("click", { bubbles: true, shiftKey }),
+            );
         };
 
         // Act
         clickLayer(1);
 
         // Assert
+        assertThat(
+          Array.from(this.cut.selectedLayerIds),
+          isArray([eq("layer-3")]),
+          "only layer 3 is selected",
+        );
         await asyncAssertScreenshot(
           __dirname + "/layers_panel_test.click_without_shift.png",
           __dirname + "/golden/layers_panel_test.click_without_shift.png",
@@ -158,6 +186,11 @@ TEST_RUNNER.run({
         clickLayer(2, true);
 
         // Assert
+        assertThat(
+          Array.from(this.cut.selectedLayerIds),
+          isArray([eq("layer-3"), eq("layer-2")]),
+          "layers 2 and 3 are selected",
+        );
         await asyncAssertScreenshot(
           __dirname + "/layers_panel_test.shift_click_add.png",
           __dirname + "/golden/layers_panel_test.shift_click_add.png",
@@ -169,6 +202,11 @@ TEST_RUNNER.run({
         clickLayer(2, true);
 
         // Assert
+        assertThat(
+          Array.from(this.cut.selectedLayerIds),
+          isArray([eq("layer-2")]),
+          "only layer 2 is selected",
+        );
         await asyncAssertScreenshot(
           __dirname + "/layers_panel_test.shift_click_selected.png",
           __dirname + "/golden/layers_panel_test.shift_click_selected.png",
@@ -184,7 +222,7 @@ TEST_RUNNER.run({
       private cut: LayersPanel;
       public async execute() {
         // Arrange
-        this.cut = new LayersPanel({ layers: [] });
+        this.cut = new LayersPanel({ metadata: { layers: [] } });
 
         // Act
         await setViewport(400, 600);
@@ -198,7 +236,7 @@ TEST_RUNNER.run({
         );
 
         // Act
-        this.cut.addLayer({ id: "layer-new", name: "First Layer" });
+        this.cut.addLayerRow({ id: "layer-new", name: "First Layer" });
 
         // Assert
         await asyncAssertScreenshot(
@@ -217,10 +255,12 @@ TEST_RUNNER.run({
       public async execute() {
         // Arrange
         this.cut = new LayersPanel({
-          layers: [
-            { id: "layer-2", name: "Existing Layer 2" },
-            { id: "layer-1", name: "Existing Layer 1" },
-          ],
+          metadata: {
+            layers: [
+              { id: "layer-2", name: "Existing Layer 2" },
+              { id: "layer-1", name: "Existing Layer 1" },
+            ],
+          },
         });
 
         // Act
@@ -235,7 +275,7 @@ TEST_RUNNER.run({
         );
 
         // Act
-        this.cut.addLayer({ id: "layer-new", name: "New Layer" });
+        this.cut.addLayerRow({ id: "layer-new", name: "New Layer" });
 
         // Assert
         await asyncAssertScreenshot(
@@ -249,16 +289,19 @@ TEST_RUNNER.run({
       }
     })(),
     new (class implements TestCase {
-      public name = "deletes default selected layer";
+      public name = "deletes layer";
       private cut: LayersPanel;
       public async execute() {
         // Arrange
-        this.cut = new LayersPanel({
-          layers: [
-            { id: "layer-2", name: "Layer Two" },
-            { id: "layer-1", name: "Layer One" },
-          ],
-        });
+        let project: Project = {
+          metadata: {
+            layers: [
+              { id: "layer-2", name: "Layer Two" },
+              { id: "layer-1", name: "Layer One" },
+            ],
+          },
+        };
+        this.cut = new LayersPanel(project);
 
         // Act
         await setViewport(400, 600);
@@ -274,7 +317,8 @@ TEST_RUNNER.run({
         );
 
         // Act
-        this.cut.deleteSelectedLayers();
+        project.metadata.layers.shift();
+        this.cut.deleteLayerRow("layer-2");
 
         // Assert
         await asyncAssertScreenshot(
@@ -284,52 +328,18 @@ TEST_RUNNER.run({
           __dirname +
             "/layers_panel_test.delete_default_selected.after.diff.png",
         );
-      }
-      public tearDown(): void {
-        this.cut.element.remove();
-      }
-    })(),
-    new (class implements TestCase {
-      public name = "selects all layers then deletes all";
-      private cut: LayersPanel;
-      public async execute() {
-        // Arrange
-        this.cut = new LayersPanel({
-          layers: [
-            { id: "layer-3", name: "Layer Three" },
-            { id: "layer-2", name: "Layer Two" },
-            { id: "layer-1", name: "Layer One" },
-          ],
-        });
 
         // Act
-        await setViewport(400, 600);
-        document.body.appendChild(this.cut.element);
+        project.metadata.layers.pop();
+        this.cut.deleteLayerRow("layer-1");
 
         // Assert
         await asyncAssertScreenshot(
-          __dirname + "/layers_panel_test.delete_all.before.png",
-          __dirname + "/golden/layers_panel_test.delete_all.before.png",
-          __dirname + "/layers_panel_test.delete_all.before.diff.png",
-        );
-
-        const clickLayer = (index: number, shiftKey = false) => {
-          this.cut.layerRows[index].element.dispatchEvent(
-            new MouseEvent("click", { bubbles: true, shiftKey }),
-          );
-        };
-
-        // Act
-        clickLayer(0);
-        clickLayer(1, true);
-        clickLayer(2, true);
-        this.cut.deleteSelectedLayers();
-
-        // Assert
-        await asyncAssertScreenshot(
-          __dirname + "/layers_panel_test.delete_all.after.png",
-          __dirname + "/golden/layers_panel_test.delete_all.after.png",
-          __dirname + "/layers_panel_test.delete_all.after.diff.png",
+          __dirname + "/layers_panel_test.delete_default_selected.empty.png",
+          __dirname +
+            "/golden/layers_panel_test.delete_default_selected.empty.png",
+          __dirname +
+            "/layers_panel_test.delete_default_selected.empty.diff.png",
         );
       }
       public tearDown(): void {
@@ -342,20 +352,30 @@ TEST_RUNNER.run({
       public async execute() {
         // Arrange
         let project: Project = {
-          layers: [
-            { id: "layer-4", name: "Layer Four" },
-            { id: "layer-3", name: "Layer Three" },
-            { id: "layer-2", name: "Layer Two" },
-            { id: "layer-1", name: "Layer One" },
-          ],
+          metadata: {
+            layers: [
+              { id: "layer-4", name: "Layer Four" },
+              { id: "layer-3", name: "Layer Three" },
+              { id: "layer-2", name: "Layer Two" },
+              { id: "layer-1", name: "Layer One" },
+            ],
+          },
         };
         this.cut = new LayersPanel(project);
+        this.cut.on("reorder", (oldIndex: number, newIndex: number) => {
+          reorderAction(project, oldIndex, newIndex, this.cut);
+        });
 
         // Act
         await setViewport(400, 600);
         document.body.appendChild(this.cut.element);
         await waitForLayout();
-        await dragRowToPoint(this.cut, 1, getPointOnRow(this.cut, 1, 0.25));
+        await dragRowToPoint(
+          this.cut,
+          project,
+          1,
+          getPointOnRow(this.cut, project, 1, 0.25),
+        );
 
         // Assert
         await asyncAssertScreenshot(
@@ -364,7 +384,7 @@ TEST_RUNNER.run({
           __dirname + "/layers_panel_test.drag_self_first_half.diff.png",
         );
         assertThat(
-          project,
+          project.metadata,
           eqMessage(
             {
               layers: [
@@ -374,7 +394,7 @@ TEST_RUNNER.run({
                 { id: "layer-1", name: "Layer One" },
               ],
             },
-            PROJECT,
+            PROJECT_METADATA,
           ),
           "layers remain unchanged after dragging onto first half",
         );
@@ -389,20 +409,30 @@ TEST_RUNNER.run({
       public async execute() {
         // Arrange
         let project: Project = {
-          layers: [
-            { id: "layer-4", name: "Layer Four" },
-            { id: "layer-3", name: "Layer Three" },
-            { id: "layer-2", name: "Layer Two" },
-            { id: "layer-1", name: "Layer One" },
-          ],
+          metadata: {
+            layers: [
+              { id: "layer-4", name: "Layer Four" },
+              { id: "layer-3", name: "Layer Three" },
+              { id: "layer-2", name: "Layer Two" },
+              { id: "layer-1", name: "Layer One" },
+            ],
+          },
         };
         this.cut = new LayersPanel(project);
+        this.cut.on("reorder", (oldIndex: number, newIndex: number) => {
+          reorderAction(project, oldIndex, newIndex, this.cut);
+        });
 
         // Act
         await setViewport(400, 600);
         document.body.appendChild(this.cut.element);
         await waitForLayout();
-        await dragRowToPoint(this.cut, 1, getPointOnRow(this.cut, 1, 0.75));
+        await dragRowToPoint(
+          this.cut,
+          project,
+          1,
+          getPointOnRow(this.cut, project, 1, 0.75),
+        );
 
         // Assert
         await asyncAssertScreenshot(
@@ -411,7 +441,7 @@ TEST_RUNNER.run({
           __dirname + "/layers_panel_test.drag_self_second_half.diff.png",
         );
         assertThat(
-          project,
+          project.metadata,
           eqMessage(
             {
               layers: [
@@ -421,7 +451,7 @@ TEST_RUNNER.run({
                 { id: "layer-1", name: "Layer One" },
               ],
             },
-            PROJECT,
+            PROJECT_METADATA,
           ),
           "layers remain unchanged after dragging onto second half",
         );
@@ -436,14 +466,19 @@ TEST_RUNNER.run({
       public async execute() {
         // Arrange
         let project: Project = {
-          layers: [
-            { id: "layer-4", name: "Layer Four" },
-            { id: "layer-3", name: "Layer Three" },
-            { id: "layer-2", name: "Layer Two" },
-            { id: "layer-1", name: "Layer One" },
-          ],
+          metadata: {
+            layers: [
+              { id: "layer-4", name: "Layer Four" },
+              { id: "layer-3", name: "Layer Three" },
+              { id: "layer-2", name: "Layer Two" },
+              { id: "layer-1", name: "Layer One" },
+            ],
+          },
         };
         this.cut = new LayersPanel(project);
+        this.cut.on("reorder", (oldIndex: number, newIndex: number) => {
+          reorderAction(project, oldIndex, newIndex, this.cut);
+        });
 
         // Act
         await setViewport(400, 600);
@@ -451,8 +486,9 @@ TEST_RUNNER.run({
         await waitForLayout();
         await dragRowToPoint(
           this.cut,
+          project,
           1,
-          getPointBelowRow(this.cut, this.cut.layerRows.length - 1),
+          getPointBelowRow(this.cut, project, this.cut.layerRows.size - 1),
         );
 
         // Assert
@@ -462,7 +498,7 @@ TEST_RUNNER.run({
           __dirname + "/layers_panel_test.drag_middle_below_last.diff.png",
         );
         assertThat(
-          project,
+          project.metadata,
           eqMessage(
             {
               layers: [
@@ -472,7 +508,7 @@ TEST_RUNNER.run({
                 { id: "layer-3", name: "Layer Three" },
               ],
             },
-            PROJECT,
+            PROJECT_METADATA,
           ),
           "layer three moved below the last row",
         );
@@ -487,14 +523,19 @@ TEST_RUNNER.run({
       public async execute() {
         // Arrange
         let project: Project = {
-          layers: [
-            { id: "layer-4", name: "Layer Four" },
-            { id: "layer-3", name: "Layer Three" },
-            { id: "layer-2", name: "Layer Two" },
-            { id: "layer-1", name: "Layer One" },
-          ],
+          metadata: {
+            layers: [
+              { id: "layer-4", name: "Layer Four" },
+              { id: "layer-3", name: "Layer Three" },
+              { id: "layer-2", name: "Layer Two" },
+              { id: "layer-1", name: "Layer One" },
+            ],
+          },
         };
         this.cut = new LayersPanel(project);
+        this.cut.on("reorder", (oldIndex: number, newIndex: number) => {
+          reorderAction(project, oldIndex, newIndex, this.cut);
+        });
 
         // Act
         await setViewport(400, 600);
@@ -502,8 +543,9 @@ TEST_RUNNER.run({
         await waitForLayout();
         await dragRowToPoint(
           this.cut,
+          project,
           1,
-          getPointOnRow(this.cut, this.cut.layerRows.length - 1, 0.75),
+          getPointOnRow(this.cut, project, this.cut.layerRows.size - 1, 0.75),
         );
 
         // Assert
@@ -515,7 +557,7 @@ TEST_RUNNER.run({
             "/layers_panel_test.drag_middle_second_half_last.diff.png",
         );
         assertThat(
-          project,
+          project.metadata,
           eqMessage(
             {
               layers: [
@@ -525,7 +567,7 @@ TEST_RUNNER.run({
                 { id: "layer-3", name: "Layer Three" },
               ],
             },
-            PROJECT,
+            PROJECT_METADATA,
           ),
           "layer three moved after the last row",
         );
@@ -540,14 +582,19 @@ TEST_RUNNER.run({
       public async execute() {
         // Arrange
         let project: Project = {
-          layers: [
-            { id: "layer-4", name: "Layer Four" },
-            { id: "layer-3", name: "Layer Three" },
-            { id: "layer-2", name: "Layer Two" },
-            { id: "layer-1", name: "Layer One" },
-          ],
+          metadata: {
+            layers: [
+              { id: "layer-4", name: "Layer Four" },
+              { id: "layer-3", name: "Layer Three" },
+              { id: "layer-2", name: "Layer Two" },
+              { id: "layer-1", name: "Layer One" },
+            ],
+          },
         };
         this.cut = new LayersPanel(project);
+        this.cut.on("reorder", (oldIndex: number, newIndex: number) => {
+          reorderAction(project, oldIndex, newIndex, this.cut);
+        });
 
         // Act
         await setViewport(400, 600);
@@ -555,8 +602,9 @@ TEST_RUNNER.run({
         await waitForLayout();
         await dragRowToPoint(
           this.cut,
+          project,
           1,
-          getPointOnRow(this.cut, this.cut.layerRows.length - 1, 0.25),
+          getPointOnRow(this.cut, project, this.cut.layerRows.size - 1, 0.25),
         );
 
         // Assert
@@ -567,7 +615,7 @@ TEST_RUNNER.run({
           __dirname + "/layers_panel_test.drag_middle_first_half_last.diff.png",
         );
         assertThat(
-          project,
+          project.metadata,
           eqMessage(
             {
               layers: [
@@ -577,7 +625,7 @@ TEST_RUNNER.run({
                 { id: "layer-1", name: "Layer One" },
               ],
             },
-            PROJECT,
+            PROJECT_METADATA,
           ),
           "layer three inserted before the last row",
         );
@@ -592,20 +640,30 @@ TEST_RUNNER.run({
       public async execute() {
         // Arrange
         let project: Project = {
-          layers: [
-            { id: "layer-4", name: "Layer Four" },
-            { id: "layer-3", name: "Layer Three" },
-            { id: "layer-2", name: "Layer Two" },
-            { id: "layer-1", name: "Layer One" },
-          ],
+          metadata: {
+            layers: [
+              { id: "layer-4", name: "Layer Four" },
+              { id: "layer-3", name: "Layer Three" },
+              { id: "layer-2", name: "Layer Two" },
+              { id: "layer-1", name: "Layer One" },
+            ],
+          },
         };
         this.cut = new LayersPanel(project);
+        this.cut.on("reorder", (oldIndex: number, newIndex: number) => {
+          reorderAction(project, oldIndex, newIndex, this.cut);
+        });
 
         // Act
         await setViewport(400, 600);
         document.body.appendChild(this.cut.element);
         await waitForLayout();
-        await dragRowToPoint(this.cut, 2, getPointOnRow(this.cut, 0, 0.25));
+        await dragRowToPoint(
+          this.cut,
+          project,
+          2,
+          getPointOnRow(this.cut, project, 0, 0.25),
+        );
 
         // Assert
         await asyncAssertScreenshot(
@@ -616,7 +674,7 @@ TEST_RUNNER.run({
             "/layers_panel_test.drag_middle_first_half_first.diff.png",
         );
         assertThat(
-          project,
+          project.metadata,
           eqMessage(
             {
               layers: [
@@ -626,7 +684,7 @@ TEST_RUNNER.run({
                 { id: "layer-1", name: "Layer One" },
               ],
             },
-            PROJECT,
+            PROJECT_METADATA,
           ),
           "layer two moved to the very top",
         );
@@ -641,20 +699,30 @@ TEST_RUNNER.run({
       public async execute() {
         // Arrange
         let project: Project = {
-          layers: [
-            { id: "layer-4", name: "Layer Four" },
-            { id: "layer-3", name: "Layer Three" },
-            { id: "layer-2", name: "Layer Two" },
-            { id: "layer-1", name: "Layer One" },
-          ],
+          metadata: {
+            layers: [
+              { id: "layer-4", name: "Layer Four" },
+              { id: "layer-3", name: "Layer Three" },
+              { id: "layer-2", name: "Layer Two" },
+              { id: "layer-1", name: "Layer One" },
+            ],
+          },
         };
         this.cut = new LayersPanel(project);
+        this.cut.on("reorder", (oldIndex: number, newIndex: number) => {
+          reorderAction(project, oldIndex, newIndex, this.cut);
+        });
 
         // Act
         await setViewport(400, 600);
         document.body.appendChild(this.cut.element);
         await waitForLayout();
-        await dragRowToPoint(this.cut, 2, getPointOnRow(this.cut, 0, 0.75));
+        await dragRowToPoint(
+          this.cut,
+          project,
+          2,
+          getPointOnRow(this.cut, project, 0, 0.75),
+        );
 
         // Assert
         await asyncAssertScreenshot(
@@ -665,7 +733,7 @@ TEST_RUNNER.run({
             "/layers_panel_test.drag_middle_second_half_first.diff.png",
         );
         assertThat(
-          project,
+          project.metadata,
           eqMessage(
             {
               layers: [
@@ -675,7 +743,7 @@ TEST_RUNNER.run({
                 { id: "layer-1", name: "Layer One" },
               ],
             },
-            PROJECT,
+            PROJECT_METADATA,
           ),
           "layer two inserted after the first row",
         );
