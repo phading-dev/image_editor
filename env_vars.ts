@@ -2,6 +2,7 @@ export interface EnvVars {
   projectId?: string;
   vertexLocation?: string;
   geminiModel?: string;
+  enableHttps?: boolean;
   gcsSecretBucketName?: string;
   sslPrivateKeyFile?: string;
   sslCertificateFile?: string;

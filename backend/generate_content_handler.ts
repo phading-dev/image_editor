@@ -41,6 +41,7 @@ export class GenerateContentHandler extends GenerateContentHandlerInterface {
       body.safetySettingsJson,
       "safetySettingsJson",
     );
+    let tools = this.parseJson(body.toolsJson, "toolsJson");
     let modelOptions: ModelParams = {
       model: body.model,
     };
@@ -60,9 +61,12 @@ export class GenerateContentHandler extends GenerateContentHandlerInterface {
     if (body.cachedContentName) {
       requestPayload.cachedContent = body.cachedContentName;
     }
+    if (tools) {
+      requestPayload.tools = tools as any;
+    }
     let responsePayload = await generativeModel.generateContent(requestPayload);
     return {
-      responseJson: JSON.stringify(responsePayload),
+      responseJson: JSON.stringify(responsePayload.response),
     };
   }
 

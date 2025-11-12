@@ -1,4 +1,6 @@
 import { COLOR_THEME } from "../color_theme";
+import { AddLayerCommand } from "./actions/add_layer_command";
+import { DeleteLayerCommand } from "./actions/delete_layer_command";
 import { MoveCommand } from "./actions/move_command";
 import { PaintCommand } from "./actions/paint_command";
 import { ReorderLayerCommand } from "./actions/reorder_layer_command";
@@ -19,6 +21,7 @@ class ResizeHandle {
     private targetElement: HTMLElement,
     private minWidth: number,
     private maxWidth: number,
+    private initialWidth: number,
     private direction: number, // 1 for left resize, -1 for right resize
   ) {
     this.element = E.div({
@@ -28,22 +31,26 @@ class ResizeHandle {
         `background-color: ${COLOR_THEME.neutral3}`,
         "flex-shrink: 0",
         "user-select: none",
+        "touch-action: none",
       ].join("; "),
     });
-
-    this.element.addEventListener("mousedown", this.handleMouseDown);
-    document.addEventListener("mousemove", this.handleMouseMove);
-    document.addEventListener("mouseup", this.handleMouseUp);
+    this.targetElement.style.width = `${this.initialWidth}px`;
+    this.element.addEventListener("pointerdown", this.handlePointerDown);
   }
 
-  private handleMouseDown = (e: MouseEvent): void => {
+  private handlePointerDown = (e: PointerEvent): void => {
     e.preventDefault();
     this.isDragging = true;
     this.startX = e.clientX;
     this.startWidth = this.targetElement.offsetWidth;
+    this.element.setPointerCapture(e.pointerId);
+
+    this.element.addEventListener("pointermove", this.handlePointerMove);
+    this.element.addEventListener("pointerup", this.handlePointerUp);
+    this.element.addEventListener("pointercancel", this.handlePointerUp);
   };
 
-  private handleMouseMove = (e: MouseEvent): void => {
+  private handlePointerMove = (e: PointerEvent): void => {
     if (!this.isDragging) return;
 
     e.preventDefault();
@@ -57,14 +64,20 @@ class ResizeHandle {
     this.targetElement.style.width = `${newWidth}px`;
   };
 
-  private handleMouseUp = (): void => {
+  private handlePointerUp = (e: PointerEvent): void => {
+    if (!this.isDragging) return;
+
     this.isDragging = false;
+    if (this.element.hasPointerCapture(e.pointerId)) {
+      this.element.releasePointerCapture(e.pointerId);
+    }
+
+    this.element.removeEventListener("pointermove", this.handlePointerMove);
+    this.element.removeEventListener("pointerup", this.handlePointerUp);
+    this.element.removeEventListener("pointercancel", this.handlePointerUp);
   };
 
   public remove(): void {
-    this.element.removeEventListener("mousedown", this.handleMouseDown);
-    document.removeEventListener("mousemove", this.handleMouseMove);
-    document.removeEventListener("mouseup", this.handleMouseUp);
     this.element.remove();
   }
 }
@@ -103,12 +116,14 @@ export class Editor {
       this.chatPanel.element,
       200,
       800,
+      400,
       1,
     );
     this.layersResizeHandle = new ResizeHandle(
       this.layersPanel.element,
       200,
       600,
+      400,
       -1,
     );
 
@@ -139,23 +154,75 @@ export class Editor {
         ),
       );
     });
-    this.mainCanvasPanel.setGetActiveLayerId(() => this.layersPanel.activeLayerId);
-    this.mainCanvasPanel.on("paint", (canvas, oldImageData, newImageData) => {
+    this.mainCanvasPanel.setGetActiveLayerId(
+      () => this.layersPanel.activeLayerId,
+    );
+    this.mainCanvasPanel.on("paint", (context, oldImageData, newImageData) => {
       this.commandHistoryManager.pushCommand(
         new PaintCommand(
-          canvas,
+          context,
           oldImageData,
           newImageData,
           this.mainCanvasPanel,
         ),
       );
     });
-    this.mainCanvasPanel.on("move", (layer, deltaX, deltaY) => {
+    this.mainCanvasPanel.on("move", (layer, oldX, oldY, newX, newY) => {
       this.commandHistoryManager.pushCommand(
-        new MoveCommand(layer, deltaX, deltaY, this.mainCanvasPanel),
+        new MoveCommand(layer, oldX, oldY, newX, newY, this.mainCanvasPanel),
       );
     });
-    this.mainCanvasPanel.selectPaintTool();
+    this.chatPanel.on("undo", () => {
+      this.commandHistoryManager.undo();
+    });
+    this.chatPanel.on("redo", () => {
+      this.commandHistoryManager.redo();
+    });
+    this.chatPanel.on("deleteSelectedLayer", () => {
+      this.commandHistoryManager.pushCommand(
+        new DeleteLayerCommand(
+          this.project,
+          this.layersPanel.activeLayerId,
+          this.layersPanel,
+          this.mainCanvasPanel,
+        ),
+      );
+    });
+    this.chatPanel.on("addNewLayer", () => {
+      let canvas = document.createElement("canvas");
+      canvas.width = this.project.metadata.width;
+      canvas.height = this.project.metadata.height;
+      this.commandHistoryManager.pushCommand(
+        new AddLayerCommand(
+          this.project,
+          {
+            id: crypto.randomUUID(),
+            name: "Untitled Layer",
+            width: this.project.metadata.width,
+            height: this.project.metadata.height,
+            visible: true,
+            opacity: 100,
+            locked: false,
+            transform: {
+              rotation: 0,
+              scaleX: 1,
+              scaleY: 1,
+              translateX: 0,
+              translateY: 0,
+            },
+          },
+          canvas,
+          this.layersPanel,
+          this.mainCanvasPanel,
+        ),
+      );
+    });
+    this.chatPanel.on("selectMoveTool", () => {
+      this.mainCanvasPanel.selectMoveTool();
+    });
+    this.chatPanel.on("selectPaintTool", () => {
+      this.mainCanvasPanel.selectPaintTool();
+    });
   }
 
   public remove(): void {

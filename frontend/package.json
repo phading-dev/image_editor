@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@selfage/element": "^4.0.5",
+    "@selfage/tabs": "^3.0.1",
     "@selfage/web_service_client": "^3.3.5"
   },
   "devDependencies": {

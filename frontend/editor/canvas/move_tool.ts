@@ -2,16 +2,21 @@ import { Layer } from "../project_metadata";
 
 export class MoveTool {
   private isDragging = false;
+  private layer: Layer;
   private lastCanvasPoint?: { x: number; y: number };
+  private initialTransform?: { x: number; y: number };
 
   public constructor(
     private readonly canvasContainer: HTMLElement,
     private readonly canvas: HTMLCanvasElement,
     private readonly getActiveLayer: () => Layer,
+    private readonly rerender: () => void,
     private readonly commit: (
       layer: Layer,
-      deltaX: number,
-      deltaY: number,
+      oldX: number,
+      oldY: number,
+      newX: number,
+      newY: number,
     ) => void,
   ) {
     this.canvasContainer.addEventListener(
@@ -44,6 +49,11 @@ export class MoveTool {
     this.isDragging = true;
     this.canvasContainer.setPointerCapture(event.pointerId);
     this.lastCanvasPoint = this.eventToCanvasPoint(event);
+    this.layer = this.getActiveLayer();
+    this.initialTransform = {
+      x: this.layer.transform.translateX,
+      y: this.layer.transform.translateY,
+    };
   };
 
   private handlePointerMove = (event: PointerEvent): void => {
@@ -56,11 +66,10 @@ export class MoveTool {
       x: currentPoint.x - this.lastCanvasPoint.x,
       y: currentPoint.y - this.lastCanvasPoint.y,
     };
+    this.layer.transform.translateX = this.layer.transform.translateX + delta.x;
+    this.layer.transform.translateY = this.layer.transform.translateY + delta.y;
     this.lastCanvasPoint = currentPoint;
-    let layer = this.getActiveLayer();
-    layer.transform.translateX = layer.transform.translateX + delta.x;
-    layer.transform.translateY = layer.transform.translateY + delta.y;
-    this.commit(layer, delta.x, delta.y);
+    this.rerender();
   };
 
   private handlePointerUpOrCancel = (event: PointerEvent): void => {
@@ -69,10 +78,17 @@ export class MoveTool {
     }
     event.preventDefault();
     this.isDragging = false;
-    this.lastCanvasPoint = undefined;
     if (this.canvasContainer.hasPointerCapture(event.pointerId)) {
       this.canvasContainer.releasePointerCapture(event.pointerId);
     }
+    console.log("Committing move");
+    this.commit(
+      this.layer,
+      this.initialTransform.x,
+      this.initialTransform.y,
+      this.layer.transform.translateX,
+      this.layer.transform.translateY,
+    );
   };
 
   private eventToCanvasPoint(event: PointerEvent): { x: number; y: number } {

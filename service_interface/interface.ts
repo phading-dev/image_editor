@@ -13,6 +13,7 @@ export interface GenerateContentRequestBody {
   generationConfigJson?: string,
   safetySettingsJson?: string,
   cachedContentName?: string,
+  toolsJson?: string,
 }
 
 export let GENERATE_CONTENT_REQUEST_BODY: MessageDescriptor<GenerateContentRequestBody> = {
@@ -40,6 +41,10 @@ export let GENERATE_CONTENT_REQUEST_BODY: MessageDescriptor<GenerateContentReque
   }, {
     name: 'cachedContentName',
     index: 6,
+    primitiveType: PrimitiveType.STRING,
+  }, {
+    name: 'toolsJson',
+    index: 7,
     primitiveType: PrimitiveType.STRING,
   }],
 };

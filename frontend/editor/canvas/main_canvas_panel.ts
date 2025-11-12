@@ -5,19 +5,26 @@ import { Layer } from "../project_metadata";
 import { MoveTool } from "./move_tool";
 import { PaintTool } from "./paint_tool";
 import { E } from "@selfage/element/factory";
+import { TabsSwitcher } from "@selfage/tabs/switcher";
 
 export interface MainCanvasPanel {
   on(
     event: "paint",
     listener: (
-      canvas: HTMLCanvasElement,
+      context: CanvasRenderingContext2D,
       oldImageData: ImageData,
       newImageData: ImageData,
     ) => void,
   ): this;
   on(
     event: "move",
-    listener: (layer: Layer, deltaX: number, deltaY: number) => void,
+    listener: (
+      layer: Layer,
+      oldX: number,
+      oldY: number,
+      newX: number,
+      newY: number,
+    ) => void,
   ): this;
 }
 
@@ -32,6 +39,7 @@ export class MainCanvasPanel extends EventEmitter {
   private getActiveLayerId: () => string;
   private paintTool: PaintTool;
   private moveTool: MoveTool;
+  private toolSwitch = new TabsSwitcher();
 
   public constructor(private project: Project) {
     super();
@@ -54,6 +62,8 @@ export class MainCanvasPanel extends EventEmitter {
           "overflow:auto",
           "display:flex",
           `background:${COLOR_THEME.neutral4}`,
+          "user-select: none",
+          "touch-action: none",
         ].join("; "),
       },
       this.canvas,
@@ -122,25 +132,39 @@ export class MainCanvasPanel extends EventEmitter {
   }
 
   public selectPaintTool(): void {
-    this.paintTool = new PaintTool(
-      this.canvas,
-      () => this.getActiveLayer(),
-      () => this.getActiveLayerContext(),
-      () => this.rerender(),
-      (canvas, oldImageData, newImageData) =>
-        this.emit("paint", canvas, oldImageData, newImageData),
+    this.toolSwitch.show(
+      () => {
+        this.paintTool = new PaintTool(
+          this.canvas,
+          () => this.getActiveLayer(),
+          () => this.getActiveLayerContext(),
+          () => this.rerender(),
+          (context, oldImageData, newImageData) =>
+            this.emit("paint", context, oldImageData, newImageData),
+        );
+      },
+      () => {
+        this.paintTool.remove();
+      },
     );
-    this.moveTool?.remove();
   }
 
   public selectMoveTool(): void {
-    this.moveTool = new MoveTool(
-      this.element,
-      this.canvas,
-      () => this.getActiveLayer(),
-      (layer, deltaX, deltaY) => this.emit("move", layer, deltaX, deltaY),
+    this.toolSwitch.show(
+      () => {
+        this.moveTool = new MoveTool(
+          this.element,
+          this.canvas,
+          () => this.getActiveLayer(),
+          () => this.rerender(),
+          (layer, oldX, oldY, newX, newY) =>
+            this.emit("move", layer, oldX, oldY, newX, newY),
+        );
+      },
+      () => {
+        this.moveTool.remove();
+      },
     );
-    this.paintTool?.remove();
   }
 
   public remove(): void {

@@ -22,6 +22,9 @@
     - name: cachedContentName
       type: string
       index: 6
+    - name: toolsJson
+      type: string
+      index: 7
 - kind: Message
   name: GenerateContentResponse
   fields:

@@ -2,6 +2,8 @@ import { Layer } from "../project_metadata";
 
 export class PaintTool {
   private isPainting = false;
+  private layer: Layer;
+  private context: CanvasRenderingContext2D;
   private lastPaintPoint?: { x: number; y: number };
   private oldImageData?: ImageData;
 
@@ -11,7 +13,7 @@ export class PaintTool {
     private readonly getActiveLayerContext: () => CanvasRenderingContext2D,
     private readonly rerender: () => void,
     private readonly commit: (
-      canvas: HTMLCanvasElement,
+      context: CanvasRenderingContext2D,
       oldImageData: ImageData,
       newImageData: ImageData,
     ) => void,
@@ -27,11 +29,13 @@ export class PaintTool {
     event.preventDefault();
     this.isPainting = true;
     this.canvas.setPointerCapture(event.pointerId);
-    this.oldImageData = this.getActiveLayerContext().getImageData(
+    this.layer = this.getActiveLayer();
+    this.context = this.getActiveLayerContext();
+    this.oldImageData = this.context.getImageData(
       0,
       0,
-      this.canvas.width,
-      this.canvas.height,
+      this.layer.width,
+      this.layer.height,
     );
     this.paintAtPoint({ x: event.clientX, y: event.clientY });
   };
@@ -54,20 +58,18 @@ export class PaintTool {
     if (this.canvas.hasPointerCapture(event.pointerId)) {
       this.canvas.releasePointerCapture(event.pointerId);
     }
-    let newImageData = this.getActiveLayerContext().getImageData(
+    let newImageData = this.context.getImageData(
       0,
       0,
-      this.canvas.width,
-      this.canvas.height,
+      this.layer.width,
+      this.layer.height,
     );
-    this.commit(this.canvas, this.oldImageData, newImageData);
+    this.commit(this.context, this.oldImageData, newImageData);
   };
 
   private paintAtPoint(point: { x: number; y: number }): void {
-    let layer = this.getActiveLayer();
-    let layerPoint = this.eventToLayerPoint(point, layer);
-    let context = this.getActiveLayerContext();
-    this.drawStrokeSegment(context, layerPoint, this.lastPaintPoint);
+    let layerPoint = this.eventToLayerPoint(point, this.layer);
+    this.drawStrokeSegment(layerPoint, this.lastPaintPoint);
     this.lastPaintPoint = layerPoint;
     this.rerender();
   }
@@ -94,23 +96,21 @@ export class PaintTool {
   }
 
   private drawStrokeSegment(
-    context: CanvasRenderingContext2D,
     to: { x: number; y: number },
     from?: { x: number; y: number },
   ): void {
     from ??= to;
-    context.strokeStyle = "#000000";
-    let layer = this.getActiveLayer();
-    let scaleX = Math.abs(layer.transform.scaleX);
-    let scaleY = Math.abs(layer.transform.scaleY);
+    this.context.strokeStyle = "#000000";
+    let scaleX = Math.abs(this.layer.transform.scaleX);
+    let scaleY = Math.abs(this.layer.transform.scaleY);
     let averageScale = (scaleX + scaleY) / 2;
-    context.lineWidth = 1 / averageScale;
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    context.beginPath();
-    context.moveTo(from.x, from.y);
-    context.lineTo(to.x, to.y);
-    context.stroke();
+    this.context.lineWidth = 1 / averageScale;
+    this.context.lineCap = "round";
+    this.context.lineJoin = "round";
+    this.context.beginPath();
+    this.context.moveTo(from.x, from.y);
+    this.context.lineTo(to.x, to.y);
+    this.context.stroke();
   }
 
   public remove(): void {

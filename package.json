@@ -21,5 +21,8 @@
     "@selfage/generator_cli": "^4.4.12",
     "@selfage/tsconfig": "^1.1.0",
     "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "local": "bundage bwa -ec frontend/entries_local.yaml -b frontend -o frontend/bin & selfage run backend/main_local -- frontend/bin"
   }
 }

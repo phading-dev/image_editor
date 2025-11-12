@@ -16,6 +16,12 @@ interface ChatMessage {
 
 export interface ChatPanel {
   on(event: "messageSent", listener: () => void): this;
+  on(event: "undo", listener: () => void): this;
+  on(event: "redo", listener: () => void): this;
+  on(event: "addNewLayer", listener: () => void): this;
+  on(event: "deleteSelectedLayer", listener: () => void): this;
+  on(event: "selectMoveTool", listener: () => void): this;
+  on(event: "selectPaintTool", listener: () => void): this;
 }
 
 export class ChatPanel extends EventEmitter {
@@ -164,6 +170,45 @@ export class ChatPanel extends EventEmitter {
       let response = await this.serviceClient.send(
         newGenerateContentRequest({
           model: this.model,
+          systemInstructionJson: JSON.stringify({
+            role: "system",
+            parts: [
+              {
+                text: "You are a helpful assistant for an image editing application. Your role is to help users edit images by interpreting their requests and calling the appropriate functions. The application has layers (like Photoshop), and users can work on an active layer and manage layers. When users ask to perform actions, use the available functions to execute them. Be concise and friendly in your responses.",
+              },
+            ],
+          }),
+          toolsJson: JSON.stringify([
+            {
+              functionDeclarations: [
+                {
+                  name: "undo",
+                  description: "Undo the last action",
+                },
+                {
+                  name: "redo",
+                  description: "Redo the last undone action",
+                },
+                {
+                  name: "addNewLayer",
+                  description: "Add a new layer to the project",
+                },
+                {
+                  name: "deleteSelectedLayer",
+                  description: "Delete the currently selected layer",
+                },
+                {
+                  name: "selectMoveTool",
+                  description:
+                    "Switch to the move tool to reposition the image of the active layer",
+                },
+                {
+                  name: "selectPaintTool",
+                  description: "Switch to the paint/brush tool for drawing",
+                },
+              ],
+            },
+          ]),
           contentsJson: JSON.stringify([
             {
               role: "user",
@@ -195,17 +240,96 @@ export class ChatPanel extends EventEmitter {
     }
     try {
       let parsed = JSON.parse(response.responseJson);
+
+      // Handle function calls
+      this.handleFunctionCalls(parsed);
+
+      // Extract and display text response
       let text = this.extractAssistantText(parsed);
-      this.appendMessage({
-        role: "assistant",
-        text: text ?? response.responseJson,
-      });
+      if (text) {
+        this.appendMessage({
+          role: "assistant",
+          text: text,
+        });
+      }
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error);
       this.appendMessage({
         role: "error",
         text: `Failed to parse response: ${message}`,
       });
+    }
+  }
+
+  private handleFunctionCalls(payload: any): void {
+    if (!payload) {
+      return;
+    }
+    let candidates = payload.candidates;
+    if (!Array.isArray(candidates)) {
+      return;
+    }
+    for (let candidate of candidates) {
+      let content = candidate?.content;
+      if (!content) {
+        continue;
+      }
+      let parts = content.parts;
+      if (!Array.isArray(parts)) {
+        continue;
+      }
+      for (let part of parts) {
+        let functionCall = part?.functionCall;
+        if (!functionCall || !functionCall.name) {
+          continue;
+        }
+
+        // Emit events based on function name
+        switch (functionCall.name) {
+          case "undo":
+            this.emit("undo");
+            this.appendMessage({
+              role: "assistant",
+              text: "Undid the last action.",
+            });
+            break;
+          case "redo":
+            this.emit("redo");
+            this.appendMessage({
+              role: "assistant",
+              text: "Redid the last undone action.",
+            });
+            break;
+          case "addNewLayer":
+            this.emit("addNewLayer");
+            this.appendMessage({
+              role: "assistant",
+              text: "Added a new layer.",
+            });
+            break;
+          case "deleteSelectedLayer":
+            this.emit("deleteSelectedLayer");
+            this.appendMessage({
+              role: "assistant",
+              text: "Deleted selected layer.",
+            });
+            break;
+          case "selectMoveTool":
+            this.emit("selectMoveTool");
+            this.appendMessage({
+              role: "assistant",
+              text: "Switched to move tool.",
+            });
+            break;
+          case "selectPaintTool":
+            this.emit("selectPaintTool");
+            this.appendMessage({
+              role: "assistant",
+              text: "Switched to paint tool.",
+            });
+            break;
+        }
+      }
     }
   }
 
