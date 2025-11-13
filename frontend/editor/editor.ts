@@ -157,103 +157,108 @@ export class Editor {
         ),
       );
     });
-    this.mainCanvasPanel.setGetActiveLayerId(
-      () => this.layersPanel.activeLayerId,
-    );
-    this.mainCanvasPanel.on("paint", (context, oldImageData, newImageData) => {
-      this.commandHistoryManager.pushCommand(
-        new PaintCommand(
-          context,
-          oldImageData,
-          newImageData,
-          this.mainCanvasPanel,
-        ),
-      );
-    });
-    this.mainCanvasPanel.on("move", (layer, oldX, oldY, newX, newY) => {
-      this.commandHistoryManager.pushCommand(
-        new MoveCommand(layer, oldX, oldY, newX, newY, this.mainCanvasPanel),
-      );
-    });
-    this.chatPanel.setSaveProjectHandler(async () => {
-      try {
-        const zipBlob = await saveToZip(this.project);
+    this.mainCanvasPanel
+      .setGetActiveLayerId(() => this.layersPanel.activeLayerId)
+      .setGetSelectedLayerIds(() => this.layersPanel.selectedLayerIds)
+      .on("paint", (context, oldImageData, newImageData) => {
+        this.commandHistoryManager.pushCommand(
+          new PaintCommand(
+            context,
+            oldImageData,
+            newImageData,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .on("move", (layers, deltaX, deltaY) => {
+        this.commandHistoryManager.pushCommand(
+          new MoveCommand(layers, deltaX, deltaY, this.mainCanvasPanel),
+        );
+      });
+    this.chatPanel
+      .setSaveProjectHandler(async () => {
+        try {
+          const zipBlob = await saveToZip(this.project);
 
-        // Trigger download - browser will show save dialog based on user's settings
-        const url = URL.createObjectURL(zipBlob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${this.project.metadata.name}.zip`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } catch (error) {
-        console.error("Failed to save project:", error);
-        throw error;
-      }
-    });
-    this.chatPanel.setLoadProjectHandler(() => {
-      this.loadProject();
-    });
-    this.chatPanel.setRenameProjectHandler((name: string) => {
-      this.project.metadata.name = name;
-    });
-    this.chatPanel.setExportImageHandler(
-      async (filename: string, imageType: string, quality?: number) => {
-        await this.mainCanvasPanel.exportAsImage(filename, imageType, quality);
-      },
-    );
-    this.chatPanel.setUndoHandler(() => {
-      this.commandHistoryManager.undo();
-    });
-    this.chatPanel.setRedoHandler(() => {
-      this.commandHistoryManager.redo();
-    });
-    this.chatPanel.setDeleteSelectedLayerHandler(() => {
-      this.commandHistoryManager.pushCommand(
-        new DeleteLayerCommand(
-          this.project,
-          this.layersPanel.activeLayerId,
-          this.layersPanel,
-          this.mainCanvasPanel,
-        ),
-      );
-    });
-    this.chatPanel.setAddNewLayerHandler(() => {
-      let canvas = document.createElement("canvas");
-      canvas.width = this.project.metadata.width;
-      canvas.height = this.project.metadata.height;
-      this.commandHistoryManager.pushCommand(
-        new AddLayerCommand(
-          this.project,
-          {
-            id: crypto.randomUUID(),
-            name: "Untitled Layer",
-            width: this.project.metadata.width,
-            height: this.project.metadata.height,
-            visible: true,
-            opacity: 100,
-            locked: false,
-            transform: {
-              rotation: 0,
-              scaleX: 1,
-              scaleY: 1,
-              translateX: 0,
-              translateY: 0,
+          // Trigger download - browser will show save dialog based on user's settings
+          const url = URL.createObjectURL(zipBlob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${this.project.metadata.name}.zip`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error("Failed to save project:", error);
+          throw error;
+        }
+      })
+      .setLoadProjectHandler(() => {
+        this.loadProject();
+      })
+      .setRenameProjectHandler((name: string) => {
+        this.project.metadata.name = name;
+      })
+      .setExportImageHandler(
+        async (filename: string, imageType: string, quality?: number) => {
+          await this.mainCanvasPanel.exportAsImage(
+            filename,
+            imageType,
+            quality,
+          );
+        },
+      )
+      .setUndoHandler(() => {
+        this.commandHistoryManager.undo();
+      })
+      .setRedoHandler(() => {
+        this.commandHistoryManager.redo();
+      })
+      .setDeleteSelectedLayerHandler(() => {
+        this.commandHistoryManager.pushCommand(
+          new DeleteLayerCommand(
+            this.project,
+            this.layersPanel.activeLayerId,
+            this.layersPanel,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setAddNewLayerHandler(() => {
+        let canvas = document.createElement("canvas");
+        canvas.width = this.project.metadata.width;
+        canvas.height = this.project.metadata.height;
+        this.commandHistoryManager.pushCommand(
+          new AddLayerCommand(
+            this.project,
+            {
+              id: crypto.randomUUID(),
+              name: "Untitled Layer",
+              width: this.project.metadata.width,
+              height: this.project.metadata.height,
+              visible: true,
+              opacity: 100,
+              locked: false,
+              transform: {
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                translateX: 0,
+                translateY: 0,
+              },
             },
-          },
-          canvas,
-          this.layersPanel,
-          this.mainCanvasPanel,
-        ),
-      );
-    });
-    this.chatPanel.setSelectMoveToolHandler(() => {
-      this.mainCanvasPanel.selectMoveTool();
-    });
-    this.chatPanel.setSelectPaintToolHandler(() => {
-      this.mainCanvasPanel.selectPaintTool();
-    });
-    this.chatPanel.initialGreet();
+            canvas,
+            this.layersPanel,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setSelectMoveToolHandler(() => {
+        this.mainCanvasPanel.selectMoveTool();
+      })
+      .setSelectPaintToolHandler(() => {
+        this.mainCanvasPanel.selectPaintTool();
+      })
+      .initialGreet();
   }
 
   public remove(): void {

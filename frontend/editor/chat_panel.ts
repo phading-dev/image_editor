@@ -9,8 +9,8 @@ import { Ref } from "@selfage/ref";
 import { WebServiceClient } from "@selfage/web_service_client/client";
 
 interface ChatMessage {
-  role: "user" | "assistant" | "error";
-  text: string;
+  role: "user" | "error" | "model" | "function";
+  parts: any[];
 }
 
 export interface ChatPanel {
@@ -19,8 +19,10 @@ export interface ChatPanel {
 
 export class ChatPanel extends EventEmitter {
   public static create(): ChatPanel {
-    return new ChatPanel(SERVICE_CLIENT, ENV_VARS.geminiModel);
+    return new ChatPanel(SERVICE_CLIENT, ENV_VARS.geminiModel, document);
   }
+
+  private static readonly MAX_HISTORY_LENGTH = 100;
 
   public readonly element: HTMLElement;
   public readonly historyContainer: HTMLDivElement;
@@ -35,6 +37,7 @@ export class ChatPanel extends EventEmitter {
   public constructor(
     private serviceClient: WebServiceClient,
     private model: string,
+    private document: Document,
   ) {
     super();
     let historyRef = new Ref<HTMLDivElement>();
@@ -73,10 +76,7 @@ export class ChatPanel extends EventEmitter {
           style: [
             "padding: 0 0.75rem 1rem 0.75rem",
             "box-sizing:border-box",
-            "display:flex",
-            "gap:0.5rem",
-            "align-items:flex-end",
-            "flex-wrap:wrap",
+            "position:relative",
           ].join(";"),
         },
         E.textarea({
@@ -85,13 +85,12 @@ export class ChatPanel extends EventEmitter {
           rows: "1",
           placeholder: "Type a prompt…",
           style: [
-            "flex:1 0 0",
-            "min-width:0",
+            "width:100%",
             `background-color:transparent`,
             `color:${COLOR_THEME.neutral0}`,
             `border:0.0625rem solid ${COLOR_THEME.neutral2}`,
             "border-radius:0.625rem",
-            "padding:0.625rem",
+            "padding:0.625rem 2.5rem 0.625rem 0.625rem",
             "resize:vertical",
             `font-size:${FONT_M}rem`,
             "line-height:1.4",
@@ -105,22 +104,37 @@ export class ChatPanel extends EventEmitter {
             ref: sendButtonRef,
             class: "chat-panel__send",
             type: "button",
+            title: "Send",
             style: [
-              `background-color:${COLOR_THEME.accent1}`,
-              `color:${COLOR_THEME.neutral0}`,
+              "position:absolute",
+              "right:1.25rem",
+              "bottom:1.625rem",
+              `background-color:transparent`,
               "border:none",
-              "border-radius:0.5rem",
-              "padding:0.625rem 1rem",
-              `font-size:${FONT_M}rem`,
-              "font-weight:600",
+              "width:2rem",
+              "height:2rem",
               "cursor:pointer",
               "transition:opacity 120ms ease",
-              "min-width:5.75rem",
-              "align-self:flex-start",
-              "margin-top:0.25rem",
+              "padding:0.5rem",
             ].join(";"),
           },
-          E.text("Send"),
+          E.svg(
+            {
+              style: [
+                "width: 100%;",
+                "height: 100%;",
+                "fill: none;",
+                `stroke: ${COLOR_THEME.neutral0}`,
+                "stroke-width: 2;",
+                "stroke-linecap: round;",
+                "stroke-linejoin: round;",
+              ].join(";"),
+              viewBox: "2.5 2.5 19 19",
+            },
+            E.path({
+              d: "M11.5003 12H5.41872M5.24634 12.7972L4.24158 15.7986C3.69128 17.4424 3.41613 18.2643 3.61359 18.7704C3.78506 19.21 4.15335 19.5432 4.6078 19.6701C5.13111 19.8161 5.92151 19.4604 7.50231 18.7491L17.6367 14.1886C19.1797 13.4942 19.9512 13.1471 20.1896 12.6648C20.3968 12.2458 20.3968 11.7541 20.1896 11.3351C19.9512 10.8529 19.1797 10.5057 17.6367 9.81135L7.48483 5.24303C5.90879 4.53382 5.12078 4.17921 4.59799 4.32468C4.14397 4.45101 3.77572 4.78336 3.60365 5.22209C3.40551 5.72728 3.67772 6.54741 4.22215 8.18767L5.24829 11.2793C5.34179 11.561 5.38855 11.7019 5.407 11.8459C5.42338 11.9738 5.42321 12.1032 5.40651 12.231C5.38768 12.375 5.34057 12.5157 5.24634 12.7972Z",
+            }),
+          ),
         ),
       ),
     );
@@ -131,65 +145,111 @@ export class ChatPanel extends EventEmitter {
     this.input = inputRef.val;
     this.sendButton = sendButtonRef.val;
 
+    this.adjustInputHeight();
+    this.document.addEventListener("keydown", this.globalKeyDownFocus);
+    this.document.addEventListener("keydown", this.globalKeyDownShortcuts);
     this.input.addEventListener("input", () => {
       this.adjustInputHeight();
     });
-    this.adjustInputHeight();
-
     this.input.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         this.handleSend();
       }
     });
-
     this.sendButton.addEventListener("click", () => {
       this.handleSend();
     });
   }
 
-  public async initialGreet(): Promise<void> {
-    await this.sendGenerateContentRequest("Hi, can you introduce yourself?");
-  }
-
-  private async handleSend(): Promise<void> {
-    let content = this.input.value.trim();
-    if (!content || this.sending) {
+  private globalKeyDownFocus = (event: KeyboardEvent): void => {
+    // Don't capture if already focused on input or other text fields
+    if (
+      this.document.activeElement === this.input ||
+      this.document.activeElement instanceof HTMLInputElement ||
+      this.document.activeElement instanceof HTMLTextAreaElement
+    ) {
       return;
     }
 
-    this.appendMessage({
-      role: "user",
-      text: content,
-    });
-    this.input.value = "";
-    this.adjustInputHeight();
-    await this.sendGenerateContentRequest(content);
-  }
-
-  private async sendGenerateContentRequest(content: string): Promise<void> {
-    this.setSending(true);
-
-    try {
-      let text = await this.generateContent(content);
-      this.appendMessage({
-        role: "assistant",
-        text: text,
-      });
-    } catch (error) {
-      let message = error instanceof Error ? error.message : String(error);
-      this.appendMessage({
-        role: "error",
-        text: `Error: ${message}`,
-      });
-    } finally {
-      this.setSending(false);
-      this.emit("messageSent");
+    // Don't capture if modifier keys are pressed (Ctrl+C, etc.)
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return;
     }
+
+    // Handle printable characters
+    if (event.key.length === 1) {
+      this.input.focus();
+      this.adjustInputHeight();
+    }
+    // Handle backspace/delete/enter
+    else if (event.key === "Backspace" || event.key === "Delete") {
+      this.input.focus();
+    }
+  };
+
+  private globalKeyDownShortcuts = (event: KeyboardEvent): void => {
+    // Handle Ctrl+Z (undo)
+    if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key === "z" &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      this.registeredFunctionHandlers["undo"]();
+    }
+    // Handle Ctrl+Shift+Z (redo)
+    else if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key === "Z" && // Capital Z due to Shift
+      !event.altKey
+    ) {
+      event.preventDefault();
+      this.registeredFunctionHandlers["redo"]();
+    }
+    // Handle Ctrl+Y (redo - alternative)
+    else if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key === "y" &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      this.registeredFunctionHandlers["redo"]();
+    }
+    // Handle Ctrl+S (save)
+    else if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key === "s" &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      this.registeredFunctionHandlers["saveProject"]();
+    }
+  };
+
+  private adjustInputHeight(): void {
+    this.input.style.height = "auto";
+    // Minimum height: 1.4 line-height + 1.25rem padding + 0.125rem border
+    this.input.style.height = `${Math.max(this.input.scrollHeight / 16, FONT_M * 1.4 + 1.25 + 0.125)}rem`;
   }
 
   private appendMessage(message: ChatMessage): void {
     this.messages.push(message);
+    if (this.messages.length > ChatPanel.MAX_HISTORY_LENGTH) {
+      this.messages.splice(
+        0,
+        this.messages.length - ChatPanel.MAX_HISTORY_LENGTH,
+      );
+    }
+    if (
+      (message.role !== "user" &&
+        message.role !== "error" &&
+        message.role !== "model") ||
+      !message.parts.every((part: any) => part.text)
+    ) {
+      return;
+    }
+
     let item = E.div(
       {
         class: `chat-panel__message chat-panel__message--${message.role}`,
@@ -202,7 +262,7 @@ export class ChatPanel extends EventEmitter {
           "line-height:1.5",
         ].join(";"),
       },
-      E.text(message.text),
+      E.text(message.parts.map((part: any) => part.text).join("")),
     );
     if (message.role === "user") {
       item.style.alignSelf = "flex-end";
@@ -214,6 +274,46 @@ export class ChatPanel extends EventEmitter {
     }
     this.historyContainer.append(item);
     this.historyContainer.scrollTop = this.historyContainer.scrollHeight;
+  }
+
+  public async initialGreet(): Promise<void> {
+    this.messages.push({
+      role: "user",
+      parts: [{ text: "Hi, can you introduce yourself?" }],
+    });
+    await this.sendGenerateContentRequest();
+  }
+
+  private async handleSend(): Promise<void> {
+    let content = this.input.value.trim();
+    if (!content || this.sending) {
+      return;
+    }
+
+    this.appendMessage({
+      role: "user",
+      parts: [{ text: content }],
+    });
+    this.input.value = "";
+    this.adjustInputHeight();
+    await this.sendGenerateContentRequest();
+  }
+
+  private async sendGenerateContentRequest(): Promise<void> {
+    this.setSending(true);
+
+    try {
+      await this.generateContent();
+    } catch (error) {
+      let message = error instanceof Error ? error.message : String(error);
+      this.appendMessage({
+        role: "error",
+        parts: [{ text: `Error: ${message}` }],
+      });
+    } finally {
+      this.setSending(false);
+      this.emit("messageSent");
+    }
   }
 
   private setSending(value: boolean): void {
@@ -228,61 +328,59 @@ export class ChatPanel extends EventEmitter {
     }
   }
 
-  private adjustInputHeight(): void {
-    this.input.style.height = "auto";
-    // Minimum height: 1.4 line-height + 1.25rem padding + 0.125rem border
-    this.input.style.height = `${Math.max(this.input.scrollHeight / 16, FONT_M * 1.4 + 1.25 + 0.125)}rem`;
-  }
-
-  public setSaveProjectHandler(handler: () => Promise<void>): void {
+  public setSaveProjectHandler(handler: () => Promise<void>): this {
     this.registeredFunctionHandlers["saveProject"] = handler;
+    return this;
   }
 
-  public setLoadProjectHandler(handler: () => void): void {
+  public setLoadProjectHandler(handler: () => void): this {
     this.registeredFunctionHandlers["loadProject"] = handler;
+    return this;
   }
 
-  public setRenameProjectHandler(handler: (name: string) => void): void {
+  public setRenameProjectHandler(handler: (name: string) => void): this {
     this.registeredFunctionHandlers["renameProject"] = handler;
+    return this;
   }
 
   public setExportImageHandler(
     handler: (filename: string, imageType: string) => Promise<void>,
-  ): void {
+  ): this {
     this.registeredFunctionHandlers["exportImage"] = handler;
+    return this;
   }
 
-  public setUndoHandler(handler: () => void): void {
+  public setUndoHandler(handler: () => void): this {
     this.registeredFunctionHandlers["undo"] = handler;
+    return this;
   }
 
-  public setRedoHandler(handler: () => void): void {
+  public setRedoHandler(handler: () => void): this {
     this.registeredFunctionHandlers["redo"] = handler;
+    return this;
   }
 
-  public setAddNewLayerHandler(handler: () => void): void {
+  public setAddNewLayerHandler(handler: () => void): this {
     this.registeredFunctionHandlers["addNewLayer"] = handler;
+    return this;
   }
 
-  public setDeleteSelectedLayerHandler(handler: () => void): void {
+  public setDeleteSelectedLayerHandler(handler: () => void): this {
     this.registeredFunctionHandlers["deleteSelectedLayer"] = handler;
+    return this;
   }
 
-  public setSelectMoveToolHandler(handler: () => void): void {
+  public setSelectMoveToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectMoveTool"] = handler;
+    return this;
   }
 
-  public setSelectPaintToolHandler(handler: () => void): void {
+  public setSelectPaintToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectPaintTool"] = handler;
+    return this;
   }
 
-  private async generateContent(content: string): Promise<string> {
-    let contents = [
-      {
-        role: "user",
-        parts: [{ text: content }],
-      },
-    ];
+  private async generateContent(): Promise<void> {
     while (true) {
       let response = await this.serviceClient.send(
         newGenerateContentRequest({
@@ -291,7 +389,14 @@ export class ChatPanel extends EventEmitter {
             role: "system",
             parts: [
               {
-                text: "You are a helpful assistant named Alice for an image editing application. Your role is to help users edit images by interpreting their requests and calling the appropriate functions. The application has layers (like Photoshop), and users can work on an active layer and manage layers. When users ask to perform actions, use the available functions to execute them. Be concise and friendly in your responses.",
+                text: [
+                  "You are a helpful assistant named Alice for an image editing application.",
+                  "Your role is to help users edit images by interpreting their requests and calling the appropriate functions.",
+                  "The application has layers (like Photoshop), and users can work on an active layer and manage layers.",
+                  "When users ask to perform actions, use the available functions to execute them.",
+                  "Be concise and friendly in your responses.",
+                  "Shortcuts are available for undo (Ctrl+Z), redo (Ctrl+Y or Ctrl+Shift+Z), and save (Ctrl+S).",
+                ].join(" "),
               },
             ],
           }),
@@ -360,29 +465,34 @@ export class ChatPanel extends EventEmitter {
                 {
                   name: "selectMoveTool",
                   description:
-                    "Switch to the move tool to reposition the image of the active layer",
+                    "Switch to the move tool to reposition the images of all selected layers",
                 },
                 {
                   name: "selectPaintTool",
-                  description: "Switch to the paint/brush tool for drawing",
+                  description:
+                    "Switch to the paint/brush tool for drawing on the active layer",
                 },
               ],
             },
           ]),
-          contentsJson: JSON.stringify(contents),
+          contentsJson: JSON.stringify(this.messages),
         }),
       );
       if (!response.responseJson) {
-        return "[No response]";
+        throw new Error("No response from model.");
       }
       let parsed = JSON.parse(response.responseJson);
 
       // Handle function calls
-      if (!(await this.handleFunctionCalls(parsed, contents))) {
+      if (!(await this.handleFunctionCalls(parsed))) {
         // Extract and display text response
         let text = this.extractAssistantText(parsed);
         if (text) {
-          return text;
+          this.appendMessage({
+            role: "model",
+            parts: [{ text: text }],
+          });
+          return;
         } else {
           throw new Error("No text response from model.");
         }
@@ -390,10 +500,7 @@ export class ChatPanel extends EventEmitter {
     }
   }
 
-  private async handleFunctionCalls(
-    payload: any,
-    contents: any,
-  ): Promise<boolean> {
+  private async handleFunctionCalls(payload: any): Promise<boolean> {
     if (!payload) {
       return false;
     }
@@ -420,65 +527,61 @@ export class ChatPanel extends EventEmitter {
         switch (functionCall.name) {
           case "loadProject":
             this.registeredFunctionHandlers["loadProject"]();
-            contents.push(
-              {
-                role: "model",
-                parts: [
-                  {
-                    functionCall: {
-                      name: "loadProject",
-                      args: {},
+            this.appendMessage({
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "loadProject",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "function",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "loadProject",
+                    response: {
+                      success: true,
                     },
                   },
-                ],
-              },
-              {
-                role: "function",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "loadProject",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              },
-            );
+                },
+              ],
+            });
             return true;
           case "saveProject":
             await this.registeredFunctionHandlers["saveProject"]();
-            contents.push(
-              {
-                role: "model",
-                parts: [
-                  {
-                    functionCall: {
-                      name: "saveProject",
-                      args: {},
+            this.appendMessage({
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "saveProject",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "function",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "saveProject",
+                    response: {
+                      success: true,
                     },
                   },
-                ],
-              },
-              {
-                role: "function",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "saveProject",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              },
-            );
+                },
+              ],
+            });
             return true;
           case "renameProject":
             let name = functionCall.args?.name;
-            contents.push({
+            this.appendMessage({
               role: "model",
               parts: [
                 {
@@ -490,8 +593,8 @@ export class ChatPanel extends EventEmitter {
               ],
             });
             if (name) {
-              this.registeredFunctionHandlers["renameProject"]({ name });
-              contents.push({
+              this.registeredFunctionHandlers["renameProject"](name);
+              this.appendMessage({
                 role: "function",
                 parts: [
                   {
@@ -505,7 +608,7 @@ export class ChatPanel extends EventEmitter {
                 ],
               });
             } else {
-              contents.push({
+              this.appendMessage({
                 role: "function",
                 parts: [
                   {
@@ -524,7 +627,7 @@ export class ChatPanel extends EventEmitter {
           case "exportImage":
             let filename = functionCall.args?.filename ?? "export.png";
             let imageType = functionCall.args?.imageType ?? "png";
-            contents.push({
+            this.appendMessage({
               role: "model",
               parts: [
                 {
@@ -539,7 +642,7 @@ export class ChatPanel extends EventEmitter {
               filename,
               imageType,
             );
-            contents.push({
+            this.appendMessage({
               role: "function",
               parts: [
                 {
@@ -555,181 +658,169 @@ export class ChatPanel extends EventEmitter {
             return true;
           case "undo":
             this.registeredFunctionHandlers["undo"]();
-            contents.push(
-              {
-                role: "model",
-                parts: [
-                  {
-                    functionCall: {
-                      name: "undo",
-                      args: {},
+            this.appendMessage({
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "undo",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "function",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "undo",
+                    response: {
+                      success: true,
                     },
                   },
-                ],
-              },
-              {
-                role: "function",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "undo",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              },
-            );
+                },
+              ],
+            });
             return true;
           case "redo":
             this.registeredFunctionHandlers["redo"]();
-            contents.push(
-              {
-                role: "model",
-                parts: [
-                  {
-                    functionCall: {
-                      name: "redo",
-                      args: {},
+            this.appendMessage({
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "redo",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "function",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "redo",
+                    response: {
+                      success: true,
                     },
                   },
-                ],
-              },
-              {
-                role: "function",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "redo",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              },
-            );
+                },
+              ],
+            });
             return true;
           case "addNewLayer":
             this.registeredFunctionHandlers["addNewLayer"]();
-            contents.push(
-              {
-                role: "model",
-                parts: [
-                  {
-                    functionCall: {
-                      name: "addNewLayer",
-                      args: {},
+            this.appendMessage({
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "addNewLayer",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "function",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "addNewLayer",
+                    response: {
+                      success: true,
                     },
                   },
-                ],
-              },
-              {
-                role: "function",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "addNewLayer",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              },
-            );
+                },
+              ],
+            });
             return true;
           case "deleteSelectedLayer":
             this.registeredFunctionHandlers["deleteSelectedLayer"]();
-            contents.push(
-              {
-                role: "model",
-                parts: [
-                  {
-                    functionCall: {
-                      name: "deleteSelectedLayer",
-                      args: {},
+            this.appendMessage({
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "deleteSelectedLayer",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "function",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "deleteSelectedLayer",
+                    response: {
+                      success: true,
                     },
                   },
-                ],
-              },
-              {
-                role: "function",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "deleteSelectedLayer",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              },
-            );
+                },
+              ],
+            });
             return true;
           case "selectMoveTool":
             this.registeredFunctionHandlers["selectMoveTool"]();
-            contents.push(
-              {
-                role: "model",
-                parts: [
-                  {
-                    functionCall: {
-                      name: "selectMoveTool",
-                      args: {},
+            this.appendMessage({
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "selectMoveTool",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "function",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "selectMoveTool",
+                    response: {
+                      success: true,
                     },
                   },
-                ],
-              },
-              {
-                role: "function",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "selectMoveTool",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              },
-            );
+                },
+              ],
+            });
             return true;
           case "selectPaintTool":
             this.registeredFunctionHandlers["selectPaintTool"]();
-            contents.push(
-              {
-                role: "model",
-                parts: [
-                  {
-                    functionCall: {
-                      name: "selectPaintTool",
-                      args: {},
+            this.appendMessage({
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "selectPaintTool",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "function",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "selectPaintTool",
+                    response: {
+                      success: true,
                     },
                   },
-                ],
-              },
-              {
-                role: "function",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "selectPaintTool",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              },
-            );
+                },
+              ],
+            });
             return true;
           default:
-            contents.push({
-              role: "model",
+            this.appendMessage({
+              role: "error",
               parts: [
                 {
                   text: `[Error: Unknown function call: ${functionCall.name}]`,
@@ -772,6 +863,8 @@ export class ChatPanel extends EventEmitter {
 
   public remove(): void {
     this.element.remove();
+    this.document.removeEventListener("keydown", this.globalKeyDownFocus);
+    this.document.removeEventListener("keydown", this.globalKeyDownShortcuts);
     this.removeAllListeners();
   }
 }

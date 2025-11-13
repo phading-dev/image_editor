@@ -18,13 +18,7 @@ export interface MainCanvasPanel {
   ): this;
   on(
     event: "move",
-    listener: (
-      layer: Layer,
-      oldX: number,
-      oldY: number,
-      newX: number,
-      newY: number,
-    ) => void,
+    listener: (layers: Layer[], deltaX: number, deltaY: number) => void,
   ): this;
 }
 
@@ -37,6 +31,7 @@ export class MainCanvasPanel extends EventEmitter {
   private readonly canvas: HTMLCanvasElement;
   private readonly context: CanvasRenderingContext2D;
   private getActiveLayerId: () => string;
+  private getSelectedLayerIds: () => Set<string>;
   private paintTool: PaintTool;
   private moveTool: MoveTool;
   private toolSwitch = new TabsSwitcher();
@@ -105,10 +100,7 @@ export class MainCanvasPanel extends EventEmitter {
       let opacity = Math.max(0, Math.min(1, layer.opacity / 100));
       context.save();
       context.globalAlpha = opacity;
-      context.translate(
-        layer.transform.translateX,
-        layer.transform.translateY,
-      );
+      context.translate(layer.transform.translateX, layer.transform.translateY);
       // Rotate around the top-left corner to stay consistent with translation.
       context.rotate((layer.transform.rotation * Math.PI) / 180);
       context.scale(layer.transform.scaleX, layer.transform.scaleY);
@@ -132,6 +124,18 @@ export class MainCanvasPanel extends EventEmitter {
     return this.project.layersToCanvas
       .get(this.getActiveLayerId())
       .getContext("2d");
+  }
+
+  public setGetSelectedLayerIds(getSelectedLayerIds: () => Set<string>): this {
+    this.getSelectedLayerIds = getSelectedLayerIds;
+    return this;
+  }
+
+  private getSelectedLayers(): Layer[] {
+    const selectedIds = this.getSelectedLayerIds();
+    return this.project.metadata.layers.filter((layer) =>
+      selectedIds.has(layer.id),
+    );
   }
 
   public selectPaintTool(): void {
@@ -158,10 +162,9 @@ export class MainCanvasPanel extends EventEmitter {
         this.moveTool = new MoveTool(
           this.element,
           this.canvas,
-          () => this.getActiveLayer(),
+          () => this.getSelectedLayers(),
           () => this.rerender(),
-          (layer, oldX, oldY, newX, newY) =>
-            this.emit("move", layer, oldX, oldY, newX, newY),
+          (layers, deltaX, deltaY) => this.emit("move", layers, deltaX, deltaY),
         );
       },
       () => {
