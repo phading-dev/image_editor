@@ -253,6 +253,7 @@ export class Editor {
     this.chatPanel.setSelectPaintToolHandler(() => {
       this.mainCanvasPanel.selectPaintTool();
     });
+    this.chatPanel.initialGreet();
   }
 
   public remove(): void {

@@ -148,6 +148,10 @@ export class ChatPanel extends EventEmitter {
     });
   }
 
+  public async initialGreet(): Promise<void> {
+    await this.sendGenerateContentRequest("Hi, can you introduce yourself?");
+  }
+
   private async handleSend(): Promise<void> {
     let content = this.input.value.trim();
     if (!content || this.sending) {
@@ -160,6 +164,10 @@ export class ChatPanel extends EventEmitter {
     });
     this.input.value = "";
     this.adjustInputHeight();
+    await this.sendGenerateContentRequest(content);
+  }
+
+  private async sendGenerateContentRequest(content: string): Promise<void> {
     this.setSending(true);
 
     try {
@@ -283,7 +291,7 @@ export class ChatPanel extends EventEmitter {
             role: "system",
             parts: [
               {
-                text: "You are a helpful assistant for an image editing application. Your role is to help users edit images by interpreting their requests and calling the appropriate functions. The application has layers (like Photoshop), and users can work on an active layer and manage layers. When users ask to perform actions, use the available functions to execute them. Be concise and friendly in your responses.",
+                text: "You are a helpful assistant named Alice for an image editing application. Your role is to help users edit images by interpreting their requests and calling the appropriate functions. The application has layers (like Photoshop), and users can work on an active layer and manage layers. When users ask to perform actions, use the available functions to execute them. Be concise and friendly in your responses.",
               },
             ],
           }),
@@ -293,7 +301,7 @@ export class ChatPanel extends EventEmitter {
                 {
                   name: "loadProject",
                   description:
-                    "Launch a file picker to load or open a project from a zip file. A file may or may not be selected depending on the user.",
+                    "Launch a file picker to open a project from a zip file. A file may or may not be selected depending on the user.",
                 },
                 {
                   name: "saveProject",
@@ -323,12 +331,12 @@ export class ChatPanel extends EventEmitter {
                       filename: {
                         type: "string",
                         description:
-                          "The name of the exported image file, including extension (e.g., image.png, image.jpg). Default is export.png.",
+                          "Optionally the name of the exported image file, including extension (e.g., image.png, image.jpg). Default is export.png.",
                       },
                       imageType: {
                         type: "string",
                         description:
-                          "The format of the exported image (e.g., png, jpeg, webp). Default is png.",
+                          "Optionally the format of the exported image (e.g., png, jpeg, webp). Default is png.",
                       },
                     },
                   },

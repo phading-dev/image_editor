@@ -1,0 +1,4 @@
+# Base dir: frontend/
+entries:
+  - source: main_prod
+    output: index
