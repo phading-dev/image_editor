@@ -18,7 +18,7 @@ docker stop $CONTAINER_NAME || true
 docker rm $CONTAINER_NAME || true
 
 # Pull the latest version of the container image
-docker pull gcr.io/${GCP_PROJECT_ID}/web:latest
+docker pull gcr.io/image-editor-477100/app:latest
 
 # Run docker container from image in docker hub
-docker run   --name=$CONTAINER_NAME   --privileged   --restart=always   --tty   --detach   --network="host"   --log-driver=gcplogs   gcr.io/${GCP_PROJECT_ID}/web:latest
+docker run   --name=$CONTAINER_NAME   --privileged   --restart=always   --tty   --detach   --network="host"   --log-driver=gcplogs   gcr.io/image-editor-477100/app:latest
