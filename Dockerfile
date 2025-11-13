@@ -4,7 +4,7 @@ WORKDIR /app
 # COPY package-lock.json .
 COPY backend/package.json .
 COPY bin/ .
-RUN npm ci --omit=dev
+RUN npm i --omit=dev
 
 EXPOSE 80 443
 CMD ["node", "main_bin", "static"]
