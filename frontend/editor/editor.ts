@@ -9,6 +9,7 @@ import { ChatPanel } from "./chat_panel";
 import { CommandHistoryManager } from "./command_history_manager";
 import { LayersPanel } from "./layers_panel";
 import { Project } from "./project";
+import { saveToZip } from "./project_serializer";
 import { E } from "@selfage/element/factory";
 
 class ResizeHandle {
@@ -83,13 +84,14 @@ class ResizeHandle {
 }
 
 export class Editor {
-  public static create(project: Project): Editor {
+  public static create(loadProject: () => void, project: Project): Editor {
     return new Editor(
-      project,
       ChatPanel.create,
       MainCanvasPanel.create,
       LayersPanel.create,
       CommandHistoryManager.create,
+      project,
+      loadProject,
     );
   }
 
@@ -102,15 +104,16 @@ export class Editor {
   private readonly layersResizeHandle: ResizeHandle;
 
   public constructor(
-    private readonly project: Project,
     private readonly createChatPanel: typeof ChatPanel.create,
     private readonly createMainCanvasPanel: typeof MainCanvasPanel.create,
     private readonly createLayersPanel: typeof LayersPanel.create,
     private readonly createCommandHistoryManager: typeof CommandHistoryManager.create,
+    private readonly project: Project,
+    private readonly loadProject: () => void,
   ) {
     this.chatPanel = this.createChatPanel();
-    this.layersPanel = this.createLayersPanel(this.project);
     this.mainCanvasPanel = this.createMainCanvasPanel(this.project);
+    this.layersPanel = this.createLayersPanel(this.project);
     this.commandHistoryManager = this.createCommandHistoryManager();
     this.chatResizeHandle = new ResizeHandle(
       this.chatPanel.element,
@@ -172,13 +175,40 @@ export class Editor {
         new MoveCommand(layer, oldX, oldY, newX, newY, this.mainCanvasPanel),
       );
     });
-    this.chatPanel.on("undo", () => {
+    this.chatPanel.setSaveProjectHandler(async () => {
+      try {
+        const zipBlob = await saveToZip(this.project);
+
+        // Trigger download - browser will show save dialog based on user's settings
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${this.project.metadata.name}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Failed to save project:", error);
+        throw error;
+      }
+    });
+    this.chatPanel.setLoadProjectHandler(() => {
+      this.loadProject();
+    });
+    this.chatPanel.setRenameProjectHandler((name: string) => {
+      this.project.metadata.name = name;
+    });
+    this.chatPanel.setExportImageHandler(
+      async (filename: string, imageType: string, quality?: number) => {
+        await this.mainCanvasPanel.exportAsImage(filename, imageType, quality);
+      },
+    );
+    this.chatPanel.setUndoHandler(() => {
       this.commandHistoryManager.undo();
     });
-    this.chatPanel.on("redo", () => {
+    this.chatPanel.setRedoHandler(() => {
       this.commandHistoryManager.redo();
     });
-    this.chatPanel.on("deleteSelectedLayer", () => {
+    this.chatPanel.setDeleteSelectedLayerHandler(() => {
       this.commandHistoryManager.pushCommand(
         new DeleteLayerCommand(
           this.project,
@@ -188,7 +218,7 @@ export class Editor {
         ),
       );
     });
-    this.chatPanel.on("addNewLayer", () => {
+    this.chatPanel.setAddNewLayerHandler(() => {
       let canvas = document.createElement("canvas");
       canvas.width = this.project.metadata.width;
       canvas.height = this.project.metadata.height;
@@ -217,10 +247,10 @@ export class Editor {
         ),
       );
     });
-    this.chatPanel.on("selectMoveTool", () => {
+    this.chatPanel.setSelectMoveToolHandler(() => {
       this.mainCanvasPanel.selectMoveTool();
     });
-    this.chatPanel.on("selectPaintTool", () => {
+    this.chatPanel.setSelectPaintToolHandler(() => {
       this.mainCanvasPanel.selectPaintTool();
     });
   }

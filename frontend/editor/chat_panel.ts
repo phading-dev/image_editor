@@ -1,7 +1,6 @@
 import EventEmitter = require("events");
 import { ENV_VARS } from "../../env_vars";
 import { newGenerateContentRequest } from "../../service_interface/client";
-import { GenerateContentResponse } from "../../service_interface/interface";
 import { COLOR_THEME } from "../color_theme";
 import { SERVICE_CLIENT } from "../service_client";
 import { FONT_M } from "../sizes";
@@ -16,12 +15,6 @@ interface ChatMessage {
 
 export interface ChatPanel {
   on(event: "messageSent", listener: () => void): this;
-  on(event: "undo", listener: () => void): this;
-  on(event: "redo", listener: () => void): this;
-  on(event: "addNewLayer", listener: () => void): this;
-  on(event: "deleteSelectedLayer", listener: () => void): this;
-  on(event: "selectMoveTool", listener: () => void): this;
-  on(event: "selectPaintTool", listener: () => void): this;
 }
 
 export class ChatPanel extends EventEmitter {
@@ -35,6 +28,9 @@ export class ChatPanel extends EventEmitter {
   public readonly sendButton: HTMLButtonElement;
   private sending = false;
   private readonly messages: Array<ChatMessage> = [];
+  private readonly registeredFunctionHandlers: {
+    [functionName: string]: (...args: any) => any;
+  } = {};
 
   public constructor(
     private serviceClient: WebServiceClient,
@@ -167,57 +163,11 @@ export class ChatPanel extends EventEmitter {
     this.setSending(true);
 
     try {
-      let response = await this.serviceClient.send(
-        newGenerateContentRequest({
-          model: this.model,
-          systemInstructionJson: JSON.stringify({
-            role: "system",
-            parts: [
-              {
-                text: "You are a helpful assistant for an image editing application. Your role is to help users edit images by interpreting their requests and calling the appropriate functions. The application has layers (like Photoshop), and users can work on an active layer and manage layers. When users ask to perform actions, use the available functions to execute them. Be concise and friendly in your responses.",
-              },
-            ],
-          }),
-          toolsJson: JSON.stringify([
-            {
-              functionDeclarations: [
-                {
-                  name: "undo",
-                  description: "Undo the last action",
-                },
-                {
-                  name: "redo",
-                  description: "Redo the last undone action",
-                },
-                {
-                  name: "addNewLayer",
-                  description: "Add a new layer to the project",
-                },
-                {
-                  name: "deleteSelectedLayer",
-                  description: "Delete the currently selected layer",
-                },
-                {
-                  name: "selectMoveTool",
-                  description:
-                    "Switch to the move tool to reposition the image of the active layer",
-                },
-                {
-                  name: "selectPaintTool",
-                  description: "Switch to the paint/brush tool for drawing",
-                },
-              ],
-            },
-          ]),
-          contentsJson: JSON.stringify([
-            {
-              role: "user",
-              parts: [{ text: content }],
-            },
-          ]),
-        }),
-      );
-      this.handleResponse(response);
+      let text = await this.generateContent(content);
+      this.appendMessage({
+        role: "assistant",
+        text: text,
+      });
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error);
       this.appendMessage({
@@ -228,136 +178,6 @@ export class ChatPanel extends EventEmitter {
       this.setSending(false);
       this.emit("messageSent");
     }
-  }
-
-  private handleResponse(response: GenerateContentResponse): void {
-    if (!response.responseJson) {
-      this.appendMessage({
-        role: "assistant",
-        text: "[No response]",
-      });
-      return;
-    }
-    try {
-      let parsed = JSON.parse(response.responseJson);
-
-      // Handle function calls
-      this.handleFunctionCalls(parsed);
-
-      // Extract and display text response
-      let text = this.extractAssistantText(parsed);
-      if (text) {
-        this.appendMessage({
-          role: "assistant",
-          text: text,
-        });
-      }
-    } catch (error) {
-      let message = error instanceof Error ? error.message : String(error);
-      this.appendMessage({
-        role: "error",
-        text: `Failed to parse response: ${message}`,
-      });
-    }
-  }
-
-  private handleFunctionCalls(payload: any): void {
-    if (!payload) {
-      return;
-    }
-    let candidates = payload.candidates;
-    if (!Array.isArray(candidates)) {
-      return;
-    }
-    for (let candidate of candidates) {
-      let content = candidate?.content;
-      if (!content) {
-        continue;
-      }
-      let parts = content.parts;
-      if (!Array.isArray(parts)) {
-        continue;
-      }
-      for (let part of parts) {
-        let functionCall = part?.functionCall;
-        if (!functionCall || !functionCall.name) {
-          continue;
-        }
-
-        // Emit events based on function name
-        switch (functionCall.name) {
-          case "undo":
-            this.emit("undo");
-            this.appendMessage({
-              role: "assistant",
-              text: "Undid the last action.",
-            });
-            break;
-          case "redo":
-            this.emit("redo");
-            this.appendMessage({
-              role: "assistant",
-              text: "Redid the last undone action.",
-            });
-            break;
-          case "addNewLayer":
-            this.emit("addNewLayer");
-            this.appendMessage({
-              role: "assistant",
-              text: "Added a new layer.",
-            });
-            break;
-          case "deleteSelectedLayer":
-            this.emit("deleteSelectedLayer");
-            this.appendMessage({
-              role: "assistant",
-              text: "Deleted selected layer.",
-            });
-            break;
-          case "selectMoveTool":
-            this.emit("selectMoveTool");
-            this.appendMessage({
-              role: "assistant",
-              text: "Switched to move tool.",
-            });
-            break;
-          case "selectPaintTool":
-            this.emit("selectPaintTool");
-            this.appendMessage({
-              role: "assistant",
-              text: "Switched to paint tool.",
-            });
-            break;
-        }
-      }
-    }
-  }
-
-  private extractAssistantText(payload: any): string | undefined {
-    if (!payload) {
-      return undefined;
-    }
-    let candidates = payload.candidates;
-    if (!Array.isArray(candidates)) {
-      return undefined;
-    }
-    for (let candidate of candidates) {
-      let content = candidate?.content;
-      if (!content) {
-        continue;
-      }
-      let parts = content.parts;
-      if (!Array.isArray(parts)) {
-        continue;
-      }
-      let textParts = parts
-        .map((part: any) => part?.text)
-        .filter((value: any): value is string => typeof value === "string");
-      if (textParts.length > 0) {
-        return textParts.join("\n");
-      }
-    }
-    return undefined;
   }
 
   private appendMessage(message: ChatMessage): void {
@@ -404,6 +224,542 @@ export class ChatPanel extends EventEmitter {
     this.input.style.height = "auto";
     // Minimum height: 1.4 line-height + 1.25rem padding + 0.125rem border
     this.input.style.height = `${Math.max(this.input.scrollHeight / 16, FONT_M * 1.4 + 1.25 + 0.125)}rem`;
+  }
+
+  public setSaveProjectHandler(handler: () => Promise<void>): void {
+    this.registeredFunctionHandlers["saveProject"] = handler;
+  }
+
+  public setLoadProjectHandler(handler: () => void): void {
+    this.registeredFunctionHandlers["loadProject"] = handler;
+  }
+
+  public setRenameProjectHandler(handler: (name: string) => void): void {
+    this.registeredFunctionHandlers["renameProject"] = handler;
+  }
+
+  public setExportImageHandler(
+    handler: (filename: string, imageType: string) => Promise<void>,
+  ): void {
+    this.registeredFunctionHandlers["exportImage"] = handler;
+  }
+
+  public setUndoHandler(handler: () => void): void {
+    this.registeredFunctionHandlers["undo"] = handler;
+  }
+
+  public setRedoHandler(handler: () => void): void {
+    this.registeredFunctionHandlers["redo"] = handler;
+  }
+
+  public setAddNewLayerHandler(handler: () => void): void {
+    this.registeredFunctionHandlers["addNewLayer"] = handler;
+  }
+
+  public setDeleteSelectedLayerHandler(handler: () => void): void {
+    this.registeredFunctionHandlers["deleteSelectedLayer"] = handler;
+  }
+
+  public setSelectMoveToolHandler(handler: () => void): void {
+    this.registeredFunctionHandlers["selectMoveTool"] = handler;
+  }
+
+  public setSelectPaintToolHandler(handler: () => void): void {
+    this.registeredFunctionHandlers["selectPaintTool"] = handler;
+  }
+
+  private async generateContent(content: string): Promise<string> {
+    let contents = [
+      {
+        role: "user",
+        parts: [{ text: content }],
+      },
+    ];
+    while (true) {
+      let response = await this.serviceClient.send(
+        newGenerateContentRequest({
+          model: this.model,
+          systemInstructionJson: JSON.stringify({
+            role: "system",
+            parts: [
+              {
+                text: "You are a helpful assistant for an image editing application. Your role is to help users edit images by interpreting their requests and calling the appropriate functions. The application has layers (like Photoshop), and users can work on an active layer and manage layers. When users ask to perform actions, use the available functions to execute them. Be concise and friendly in your responses.",
+              },
+            ],
+          }),
+          toolsJson: JSON.stringify([
+            {
+              functionDeclarations: [
+                {
+                  name: "loadProject",
+                  description:
+                    "Launch a file picker to load or open a project from a zip file. A file may or may not be selected depending on the user.",
+                },
+                {
+                  name: "saveProject",
+                  description:
+                    "Save the current project to a zip file. A file picker may or may not appear depending on the browser.",
+                },
+                {
+                  name: "renameProject",
+                  description: "Rename the current project",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      name: {
+                        type: "string",
+                        description: "The new name for the project",
+                      },
+                    },
+                    required: ["name"],
+                  },
+                },
+                {
+                  name: "exportImage",
+                  description: "Export the current project as an image file",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      filename: {
+                        type: "string",
+                        description:
+                          "The name of the exported image file, including extension (e.g., image.png, image.jpg). Default is export.png.",
+                      },
+                      imageType: {
+                        type: "string",
+                        description:
+                          "The format of the exported image (e.g., png, jpeg, webp). Default is png.",
+                      },
+                    },
+                  },
+                },
+                {
+                  name: "undo",
+                  description: "Undo the last action",
+                },
+                {
+                  name: "redo",
+                  description: "Redo the last undone action",
+                },
+                {
+                  name: "addNewLayer",
+                  description: "Add a new layer to the project",
+                },
+                {
+                  name: "deleteSelectedLayer",
+                  description: "Delete the currently selected layer",
+                },
+                {
+                  name: "selectMoveTool",
+                  description:
+                    "Switch to the move tool to reposition the image of the active layer",
+                },
+                {
+                  name: "selectPaintTool",
+                  description: "Switch to the paint/brush tool for drawing",
+                },
+              ],
+            },
+          ]),
+          contentsJson: JSON.stringify(contents),
+        }),
+      );
+      if (!response.responseJson) {
+        return "[No response]";
+      }
+      let parsed = JSON.parse(response.responseJson);
+
+      // Handle function calls
+      if (!(await this.handleFunctionCalls(parsed, contents))) {
+        // Extract and display text response
+        let text = this.extractAssistantText(parsed);
+        if (text) {
+          return text;
+        } else {
+          throw new Error("No text response from model.");
+        }
+      }
+    }
+  }
+
+  private async handleFunctionCalls(
+    payload: any,
+    contents: any,
+  ): Promise<boolean> {
+    if (!payload) {
+      return false;
+    }
+    let candidates = payload.candidates;
+    if (!Array.isArray(candidates)) {
+      return false;
+    }
+    for (let candidate of candidates) {
+      let content = candidate?.content;
+      if (!content) {
+        continue;
+      }
+      let parts = content.parts;
+      if (!Array.isArray(parts)) {
+        continue;
+      }
+      for (let part of parts) {
+        let functionCall = part?.functionCall;
+        if (!functionCall || !functionCall.name) {
+          continue;
+        }
+
+        // Emit events based on function name
+        switch (functionCall.name) {
+          case "loadProject":
+            this.registeredFunctionHandlers["loadProject"]();
+            contents.push(
+              {
+                role: "model",
+                parts: [
+                  {
+                    functionCall: {
+                      name: "loadProject",
+                      args: {},
+                    },
+                  },
+                ],
+              },
+              {
+                role: "function",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "loadProject",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              },
+            );
+            return true;
+          case "saveProject":
+            await this.registeredFunctionHandlers["saveProject"]();
+            contents.push(
+              {
+                role: "model",
+                parts: [
+                  {
+                    functionCall: {
+                      name: "saveProject",
+                      args: {},
+                    },
+                  },
+                ],
+              },
+              {
+                role: "function",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "saveProject",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              },
+            );
+            return true;
+          case "renameProject":
+            let name = functionCall.args?.name;
+            contents.push({
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "renameProject",
+                    args: { name: name },
+                  },
+                },
+              ],
+            });
+            if (name) {
+              this.registeredFunctionHandlers["renameProject"]({ name });
+              contents.push({
+                role: "function",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "renameProject",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              });
+            } else {
+              contents.push({
+                role: "function",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "renameProject",
+                      response: {
+                        success: false,
+                        error: "Failed to rename: name parameter is required.",
+                      },
+                    },
+                  },
+                ],
+              });
+            }
+            return true;
+          case "exportImage":
+            let filename = functionCall.args?.filename ?? "export.png";
+            let imageType = functionCall.args?.imageType ?? "png";
+            contents.push({
+              role: "model",
+              parts: [
+                {
+                  functionCall: {
+                    name: "exportImage",
+                    args: { filename: filename, imageType: imageType },
+                  },
+                },
+              ],
+            });
+            await this.registeredFunctionHandlers["exportImage"](
+              filename,
+              imageType,
+            );
+            contents.push({
+              role: "function",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "exportImage",
+                    response: {
+                      success: true,
+                    },
+                  },
+                },
+              ],
+            });
+            return true;
+          case "undo":
+            this.registeredFunctionHandlers["undo"]();
+            contents.push(
+              {
+                role: "model",
+                parts: [
+                  {
+                    functionCall: {
+                      name: "undo",
+                      args: {},
+                    },
+                  },
+                ],
+              },
+              {
+                role: "function",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "undo",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              },
+            );
+            return true;
+          case "redo":
+            this.registeredFunctionHandlers["redo"]();
+            contents.push(
+              {
+                role: "model",
+                parts: [
+                  {
+                    functionCall: {
+                      name: "redo",
+                      args: {},
+                    },
+                  },
+                ],
+              },
+              {
+                role: "function",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "redo",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              },
+            );
+            return true;
+          case "addNewLayer":
+            this.registeredFunctionHandlers["addNewLayer"]();
+            contents.push(
+              {
+                role: "model",
+                parts: [
+                  {
+                    functionCall: {
+                      name: "addNewLayer",
+                      args: {},
+                    },
+                  },
+                ],
+              },
+              {
+                role: "function",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "addNewLayer",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              },
+            );
+            return true;
+          case "deleteSelectedLayer":
+            this.registeredFunctionHandlers["deleteSelectedLayer"]();
+            contents.push(
+              {
+                role: "model",
+                parts: [
+                  {
+                    functionCall: {
+                      name: "deleteSelectedLayer",
+                      args: {},
+                    },
+                  },
+                ],
+              },
+              {
+                role: "function",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "deleteSelectedLayer",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              },
+            );
+            return true;
+          case "selectMoveTool":
+            this.registeredFunctionHandlers["selectMoveTool"]();
+            contents.push(
+              {
+                role: "model",
+                parts: [
+                  {
+                    functionCall: {
+                      name: "selectMoveTool",
+                      args: {},
+                    },
+                  },
+                ],
+              },
+              {
+                role: "function",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "selectMoveTool",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              },
+            );
+            return true;
+          case "selectPaintTool":
+            this.registeredFunctionHandlers["selectPaintTool"]();
+            contents.push(
+              {
+                role: "model",
+                parts: [
+                  {
+                    functionCall: {
+                      name: "selectPaintTool",
+                      args: {},
+                    },
+                  },
+                ],
+              },
+              {
+                role: "function",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "selectPaintTool",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              },
+            );
+            return true;
+          default:
+            contents.push({
+              role: "model",
+              parts: [
+                {
+                  text: `[Error: Unknown function call: ${functionCall.name}]`,
+                },
+              ],
+            });
+            return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private extractAssistantText(payload: any): string | undefined {
+    if (!payload) {
+      return undefined;
+    }
+    let candidates = payload.candidates;
+    if (!Array.isArray(candidates)) {
+      return undefined;
+    }
+    for (let candidate of candidates) {
+      let content = candidate?.content;
+      if (!content) {
+        continue;
+      }
+      let parts = content.parts;
+      if (!Array.isArray(parts)) {
+        continue;
+      }
+      let textParts = parts
+        .map((part: any) => part?.text)
+        .filter((value: any): value is string => typeof value === "string");
+      if (textParts.length > 0) {
+        return textParts.join("\n");
+      }
+    }
+    return undefined;
   }
 
   public remove(): void {

@@ -1,7 +1,6 @@
 import "./env_const";
 import { ENV_VARS } from "./env_vars";
 
-ENV_VARS.geminiModel = "gemini-2.5-flash";
 ENV_VARS.projectId = "image-editor-477100";
 ENV_VARS.enableHttps = false;
 ENV_VARS.externalDomain = "localhost";

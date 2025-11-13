@@ -26,14 +26,6 @@ export class LayerRow extends EventEmitter {
   public constructor(layer: Layer) {
     super();
     this.id = layer.id;
-    let name = layer.name ?? "Untitled Layer";
-    let visible = layer.visible !== false;
-    let opacity = layer.opacity != null ? layer.opacity : 1;
-    if (opacity > 1) {
-      opacity = opacity / 100;
-    }
-    opacity = Math.max(0, Math.min(1, opacity));
-    let locked = !!layer.locked;
 
     this.element = E.div(
       {
@@ -67,7 +59,7 @@ export class LayerRow extends EventEmitter {
               "flex:1",
             ].join(";"),
           },
-          E.text(name),
+          E.text(layer.name),
         ),
       ),
       E.div(
@@ -91,7 +83,7 @@ export class LayerRow extends EventEmitter {
               "white-space:nowrap",
             ].join(";"),
           },
-          E.text(visible ? "Visible" : "Hidden"),
+          E.text(layer.visible ? "Visible" : "Hidden"),
         ),
         E.span(
           {
@@ -104,7 +96,7 @@ export class LayerRow extends EventEmitter {
               "white-space:nowrap",
             ].join(";"),
           },
-          E.text(`${Math.round(opacity * 100)}%`),
+          E.text(`${Math.round(layer.opacity)}%`),
         ),
         E.span(
           {
@@ -117,7 +109,7 @@ export class LayerRow extends EventEmitter {
               "white-space:nowrap",
             ].join(";"),
           },
-          E.text(locked ? "Locked" : "Unlocked"),
+          E.text(layer.locked ? "Locked" : "Unlocked"),
         ),
       ),
     );

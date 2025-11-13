@@ -91,7 +91,10 @@ export class MainCanvasPanel extends EventEmitter {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     // Draw checkerboard pattern to indicate transparency
     this.drawCheckerboard();
+    this.render(this.context);
+  }
 
+  private render(context: CanvasRenderingContext2D): void {
     let layers = this.project.metadata.layers;
     for (let index = layers.length - 1; index >= 0; index--) {
       let layer = layers[index];
@@ -100,17 +103,17 @@ export class MainCanvasPanel extends EventEmitter {
       }
       let layerCanvas = this.project.layersToCanvas.get(layer.id);
       let opacity = Math.max(0, Math.min(1, layer.opacity / 100));
-      this.context.save();
-      this.context.globalAlpha = opacity;
-      this.context.translate(
+      context.save();
+      context.globalAlpha = opacity;
+      context.translate(
         layer.transform.translateX,
         layer.transform.translateY,
       );
       // Rotate around the top-left corner to stay consistent with translation.
-      this.context.rotate((layer.transform.rotation * Math.PI) / 180);
-      this.context.scale(layer.transform.scaleX, layer.transform.scaleY);
-      this.context.drawImage(layerCanvas, 0, 0);
-      this.context.restore();
+      context.rotate((layer.transform.rotation * Math.PI) / 180);
+      context.scale(layer.transform.scaleX, layer.transform.scaleY);
+      context.drawImage(layerCanvas, 0, 0);
+      context.restore();
     }
   }
 
@@ -165,6 +168,39 @@ export class MainCanvasPanel extends EventEmitter {
         this.moveTool.remove();
       },
     );
+  }
+
+  public async exportAsImage(
+    filename: string,
+    imageType: string,
+    quality?: number,
+  ): Promise<void> {
+    // Create a temporary canvas without the checkerboard
+    let tempCanvas = document.createElement("canvas");
+    tempCanvas.width = this.canvas.width;
+    tempCanvas.height = this.canvas.height;
+    let tempContext = tempCanvas.getContext("2d");
+    this.render(tempContext);
+
+    return new Promise((resolve, reject) => {
+      tempCanvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Failed to export canvas"));
+            return;
+          }
+          let url = URL.createObjectURL(blob);
+          let a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(url);
+          resolve();
+        },
+        `image/${imageType}`,
+        quality,
+      );
+    });
   }
 
   public remove(): void {

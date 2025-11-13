@@ -10,13 +10,11 @@ export class PaintCommand implements Command {
   ) {}
 
   public do(): void {
-    console.log("Doing PaintCommand");
     this.context.putImageData(this.newImageData, 0, 0);
     this.mainCanvasPanel.rerender();
   }
 
   public undo(): void {
-    console.log("Undoing PaintCommand");
     this.context.putImageData(this.oldImageData, 0, 0);
     this.mainCanvasPanel.rerender();
   }

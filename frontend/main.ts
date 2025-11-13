@@ -1,10 +1,10 @@
-import { Body } from "./body";
+import { EditorFactory } from "./editor/editor_factory";
 import { normalizeBody } from "./normalize_body";
 
 normalizeBody();
 
 export function main(): void {
-  new Body(document.body);
+  EditorFactory.create(document.body);
 }
 
 main();
