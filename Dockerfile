@@ -1,8 +1,8 @@
 FROM node:22.20.0
 
 WORKDIR /app
-COPY package.json .
 COPY package-lock.json .
+COPY backend/package.json .
 COPY bin/ .
 RUN npm ci --omit=dev
 
