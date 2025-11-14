@@ -8,8 +8,26 @@ import { E } from "@selfage/element/factory";
 import { Ref } from "@selfage/ref";
 import { WebServiceClient } from "@selfage/web_service_client/client";
 
+// The roles whose messages are included in the chat context sent to the model
+const CHAT_CONTEXT_ROLES = [
+  "user",
+  "assistant",
+  "modelResponse",
+  "functionCall",
+  "functionResponse",
+];
+// The roles whose messages are displayed in the chat panel
+const DISPLAY_ROLES = ["user", "error", "warning", "modelResponse"];
+
 interface ChatMessage {
-  role: "user" | "error" | "model" | "function";
+  role:
+    | "user"
+    | "error"
+    | "warning"
+    | "assistant"
+    | "modelResponse"
+    | "functionCall"
+    | "functionResponse";
   parts: any[];
 }
 
@@ -29,7 +47,7 @@ export class ChatPanel extends EventEmitter {
   public readonly input: HTMLTextAreaElement;
   public readonly sendButton: HTMLButtonElement;
   private sending = false;
-  private readonly messages: Array<ChatMessage> = [];
+  private readonly chatHistory: Array<any> = [];
   private readonly registeredFunctionHandlers: {
     [functionName: string]: (...args: any) => any;
   } = {};
@@ -233,55 +251,64 @@ export class ChatPanel extends EventEmitter {
     this.input.style.height = `${Math.max(this.input.scrollHeight / 16, FONT_M * 1.4 + 1.25 + 0.125)}rem`;
   }
 
-  private appendMessage(message: ChatMessage): void {
-    this.messages.push(message);
-    if (this.messages.length > ChatPanel.MAX_HISTORY_LENGTH) {
-      this.messages.splice(
-        0,
-        this.messages.length - ChatPanel.MAX_HISTORY_LENGTH,
-      );
-    }
-    if (
-      (message.role !== "user" &&
-        message.role !== "error" &&
-        message.role !== "model") ||
-      !message.parts.every((part: any) => part.text)
-    ) {
-      return;
+  public appendMessage(message: ChatMessage): void {
+    if (CHAT_CONTEXT_ROLES.includes(message.role)) {
+      let role: string = message.role;
+      if (role === "assistant") {
+        role = "user";
+      } else if (role === "modelResponse") {
+        role = "model";
+      } else if (role === "functionCall") {
+        role = "model";
+      } else if (role === "functionResponse") {
+        role = "function";
+      }
+      this.chatHistory.push({
+        role,
+        parts: message.parts,
+      });
+      if (this.chatHistory.length > ChatPanel.MAX_HISTORY_LENGTH) {
+        this.chatHistory.splice(
+          0,
+          this.chatHistory.length - ChatPanel.MAX_HISTORY_LENGTH,
+        );
+      }
     }
 
-    let item = E.div(
-      {
-        class: `chat-panel__message chat-panel__message--${message.role}`,
-        style: [
-          "border-radius:0.625rem",
-          "white-space:pre-wrap",
-          "word-break:break-word",
-          `color:${COLOR_THEME.neutral0}`,
-          `font-size:${FONT_M}rem`,
-          "line-height:1.5",
-        ].join(";"),
-      },
-      E.text(message.parts.map((part: any) => part.text).join("")),
-    );
-    if (message.role === "user") {
-      item.style.alignSelf = "flex-end";
-      item.style.padding = "0.5rem 0.75rem";
-      item.style.backgroundColor = COLOR_THEME.neutral3;
-    } else if (message.role === "error") {
-      item.style.padding = "0.5rem 0.75rem";
-      item.style.backgroundColor = COLOR_THEME.error3;
+    if (DISPLAY_ROLES.includes(message.role)) {
+      let item = E.div(
+        {
+          class: `chat-panel__message chat-panel__message--${message.role}`,
+          style: [
+            "border-radius:0.625rem",
+            "white-space:pre-wrap",
+            "word-break:break-word",
+            `color:${COLOR_THEME.neutral0}`,
+            `font-size:${FONT_M}rem`,
+            "line-height:1.5",
+          ].join(";"),
+        },
+        E.text(message.parts.map((part: any) => part.text).join("")),
+      );
+      if (message.role === "user") {
+        item.style.alignSelf = "flex-end";
+        item.style.padding = "0.5rem 0.75rem";
+        item.style.backgroundColor = COLOR_THEME.neutral3;
+      } else if (message.role === "error") {
+        item.style.padding = "0.5rem 0.75rem";
+        item.style.backgroundColor = COLOR_THEME.error3;
+      }
+      this.historyContainer.append(item);
+      this.historyContainer.scrollTop = this.historyContainer.scrollHeight;
     }
-    this.historyContainer.append(item);
-    this.historyContainer.scrollTop = this.historyContainer.scrollHeight;
   }
 
   public async initialGreet(): Promise<void> {
-    this.messages.push({
-      role: "user",
+    this.appendMessage({
+      role: "assistant",
       parts: [{ text: "Hi, can you introduce yourself?" }],
     });
-    await this.sendGenerateContentRequest();
+    await this.sendMessage();
   }
 
   private async handleSend(): Promise<void> {
@@ -296,12 +323,11 @@ export class ChatPanel extends EventEmitter {
     });
     this.input.value = "";
     this.adjustInputHeight();
-    await this.sendGenerateContentRequest();
+    await this.sendMessage();
   }
 
-  private async sendGenerateContentRequest(): Promise<void> {
+  private async sendMessage(): Promise<void> {
     this.setSending(true);
-
     try {
       await this.generateContent();
     } catch (error) {
@@ -365,8 +391,33 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
-  public setDeleteSelectedLayerHandler(handler: () => void): this {
-    this.registeredFunctionHandlers["deleteSelectedLayer"] = handler;
+  public setDeleteActiveLayerHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["deleteActiveLayer"] = handler;
+    return this;
+  }
+
+  public setLockSelectedLayersHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["lockSelectedLayers"] = handler;
+    return this;
+  }
+
+  public setUnlockSelectedLayersHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["unlockSelectedLayers"] = handler;
+    return this;
+  }
+
+  public setShowSelectedLayersHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["showSelectedLayers"] = handler;
+    return this;
+  }
+
+  public setHideSelectedLayersHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["hideSelectedLayers"] = handler;
+    return this;
+  }
+
+  public setRenameActiveLayerHandler(handler: (newName: string) => void): this {
+    this.registeredFunctionHandlers["renameActiveLayer"] = handler;
     return this;
   }
 
@@ -459,8 +510,38 @@ export class ChatPanel extends EventEmitter {
                   description: "Add a new layer to the project",
                 },
                 {
-                  name: "deleteSelectedLayer",
-                  description: "Delete the currently selected layer",
+                  name: "deleteActiveLayer",
+                  description: "Delete the currently active layer",
+                },
+                {
+                  name: "lockSelectedLayers",
+                  description: "Lock the currently selected layers",
+                },
+                {
+                  name: "unlockSelectedLayers",
+                  description: "Unlock the currently selected layers",
+                },
+                {
+                  name: "showSelectedLayers",
+                  description: "Make the currently selected layers visible",
+                },
+                {
+                  name: "hideSelectedLayers",
+                  description: "Make the currently selected layers invisible",
+                },
+                {
+                  name: "renameActiveLayer",
+                  description: "Rename the currently active layer",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      newName: {
+                        type: "string",
+                        description: "The new name for the active layer",
+                      },
+                    },
+                    required: ["newName"],
+                  },
                 },
                 {
                   name: "selectMoveTool",
@@ -475,7 +556,7 @@ export class ChatPanel extends EventEmitter {
               ],
             },
           ]),
-          contentsJson: JSON.stringify(this.messages),
+          contentsJson: JSON.stringify(this.chatHistory),
         }),
       );
       if (!response.responseJson) {
@@ -489,7 +570,7 @@ export class ChatPanel extends EventEmitter {
         let text = this.extractAssistantText(parsed);
         if (text) {
           this.appendMessage({
-            role: "model",
+            role: "modelResponse",
             parts: [{ text: text }],
           });
           return;
@@ -528,7 +609,7 @@ export class ChatPanel extends EventEmitter {
           case "loadProject":
             this.registeredFunctionHandlers["loadProject"]();
             this.appendMessage({
-              role: "model",
+              role: "functionCall",
               parts: [
                 {
                   functionCall: {
@@ -539,7 +620,7 @@ export class ChatPanel extends EventEmitter {
               ],
             });
             this.appendMessage({
-              role: "function",
+              role: "functionResponse",
               parts: [
                 {
                   functionResponse: {
@@ -555,7 +636,7 @@ export class ChatPanel extends EventEmitter {
           case "saveProject":
             await this.registeredFunctionHandlers["saveProject"]();
             this.appendMessage({
-              role: "model",
+              role: "functionCall",
               parts: [
                 {
                   functionCall: {
@@ -566,7 +647,7 @@ export class ChatPanel extends EventEmitter {
               ],
             });
             this.appendMessage({
-              role: "function",
+              role: "functionResponse",
               parts: [
                 {
                   functionResponse: {
@@ -582,7 +663,7 @@ export class ChatPanel extends EventEmitter {
           case "renameProject":
             let name = functionCall.args?.name;
             this.appendMessage({
-              role: "model",
+              role: "functionCall",
               parts: [
                 {
                   functionCall: {
@@ -595,7 +676,7 @@ export class ChatPanel extends EventEmitter {
             if (name) {
               this.registeredFunctionHandlers["renameProject"](name);
               this.appendMessage({
-                role: "function",
+                role: "functionResponse",
                 parts: [
                   {
                     functionResponse: {
@@ -609,7 +690,7 @@ export class ChatPanel extends EventEmitter {
               });
             } else {
               this.appendMessage({
-                role: "function",
+                role: "functionResponse",
                 parts: [
                   {
                     functionResponse: {
@@ -628,7 +709,7 @@ export class ChatPanel extends EventEmitter {
             let filename = functionCall.args?.filename ?? "export.png";
             let imageType = functionCall.args?.imageType ?? "png";
             this.appendMessage({
-              role: "model",
+              role: "functionCall",
               parts: [
                 {
                   functionCall: {
@@ -643,7 +724,7 @@ export class ChatPanel extends EventEmitter {
               imageType,
             );
             this.appendMessage({
-              role: "function",
+              role: "functionResponse",
               parts: [
                 {
                   functionResponse: {
@@ -659,7 +740,7 @@ export class ChatPanel extends EventEmitter {
           case "undo":
             this.registeredFunctionHandlers["undo"]();
             this.appendMessage({
-              role: "model",
+              role: "functionCall",
               parts: [
                 {
                   functionCall: {
@@ -670,7 +751,7 @@ export class ChatPanel extends EventEmitter {
               ],
             });
             this.appendMessage({
-              role: "function",
+              role: "functionResponse",
               parts: [
                 {
                   functionResponse: {
@@ -686,7 +767,7 @@ export class ChatPanel extends EventEmitter {
           case "redo":
             this.registeredFunctionHandlers["redo"]();
             this.appendMessage({
-              role: "model",
+              role: "functionCall",
               parts: [
                 {
                   functionCall: {
@@ -697,7 +778,7 @@ export class ChatPanel extends EventEmitter {
               ],
             });
             this.appendMessage({
-              role: "function",
+              role: "functionResponse",
               parts: [
                 {
                   functionResponse: {
@@ -713,7 +794,7 @@ export class ChatPanel extends EventEmitter {
           case "addNewLayer":
             this.registeredFunctionHandlers["addNewLayer"]();
             this.appendMessage({
-              role: "model",
+              role: "functionCall",
               parts: [
                 {
                   functionCall: {
@@ -724,7 +805,7 @@ export class ChatPanel extends EventEmitter {
               ],
             });
             this.appendMessage({
-              role: "function",
+              role: "functionResponse",
               parts: [
                 {
                   functionResponse: {
@@ -737,25 +818,25 @@ export class ChatPanel extends EventEmitter {
               ],
             });
             return true;
-          case "deleteSelectedLayer":
-            this.registeredFunctionHandlers["deleteSelectedLayer"]();
+          case "deleteActiveLayer":
+            this.registeredFunctionHandlers["deleteActiveLayer"]();
             this.appendMessage({
-              role: "model",
+              role: "functionCall",
               parts: [
                 {
                   functionCall: {
-                    name: "deleteSelectedLayer",
+                    name: "deleteActiveLayer",
                     args: {},
                   },
                 },
               ],
             });
             this.appendMessage({
-              role: "function",
+              role: "functionResponse",
               parts: [
                 {
                   functionResponse: {
-                    name: "deleteSelectedLayer",
+                    name: "deleteActiveLayer",
                     response: {
                       success: true,
                     },
@@ -763,11 +844,165 @@ export class ChatPanel extends EventEmitter {
                 },
               ],
             });
+            return true;
+          case "lockSelectedLayers":
+            this.registeredFunctionHandlers["lockSelectedLayers"]();
+            this.appendMessage({
+              role: "functionCall",
+              parts: [
+                {
+                  functionCall: {
+                    name: "lockSelectedLayers",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "functionResponse",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "lockSelectedLayers",
+                    response: {
+                      success: true,
+                    },
+                  },
+                },
+              ],
+            });
+            return true;
+          case "unlockSelectedLayers":
+            this.registeredFunctionHandlers["unlockSelectedLayers"]();
+            this.appendMessage({
+              role: "functionCall",
+              parts: [
+                {
+                  functionCall: {
+                    name: "unlockSelectedLayers",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "functionResponse",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "unlockSelectedLayers",
+                    response: {
+                      success: true,
+                    },
+                  },
+                },
+              ],
+            });
+            return true;
+          case "showSelectedLayers":
+            this.registeredFunctionHandlers["showSelectedLayers"]();
+            this.appendMessage({
+              role: "functionCall",
+              parts: [
+                {
+                  functionCall: {
+                    name: "showSelectedLayers",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "functionResponse",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "showSelectedLayers",
+                    response: {
+                      success: true,
+                    },
+                  },
+                },
+              ],
+            });
+            return true;
+          case "hideSelectedLayers":
+            this.registeredFunctionHandlers["hideSelectedLayers"]();
+            this.appendMessage({
+              role: "functionCall",
+              parts: [
+                {
+                  functionCall: {
+                    name: "hideSelectedLayers",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "functionResponse",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "hideSelectedLayers",
+                    response: {
+                      success: true,
+                    },
+                  },
+                },
+              ],
+            });
+            return true;
+          case "renameActiveLayer":
+            let newName = functionCall.args?.newName;
+            this.appendMessage({
+              role: "functionCall",
+              parts: [
+                {
+                  functionCall: {
+                    name: "renameActiveLayer",
+                    args: { newName: newName },
+                  },
+                },
+              ],
+            });
+            if (newName) {
+              this.registeredFunctionHandlers["renameActiveLayer"](newName);
+              this.appendMessage({
+                role: "functionResponse",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "renameActiveLayer",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              });
+            } else {
+              this.appendMessage({
+                role: "functionResponse",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "renameActiveLayer",
+                      response: {
+                        success: false,
+                        error:
+                          "Failed to rename active layer: newName parameter is required.",
+                      },
+                    },
+                  },
+                ],
+              });
+            }
             return true;
           case "selectMoveTool":
             this.registeredFunctionHandlers["selectMoveTool"]();
             this.appendMessage({
-              role: "model",
+              role: "functionCall",
               parts: [
                 {
                   functionCall: {
@@ -778,7 +1013,7 @@ export class ChatPanel extends EventEmitter {
               ],
             });
             this.appendMessage({
-              role: "function",
+              role: "functionResponse",
               parts: [
                 {
                   functionResponse: {
@@ -794,7 +1029,7 @@ export class ChatPanel extends EventEmitter {
           case "selectPaintTool":
             this.registeredFunctionHandlers["selectPaintTool"]();
             this.appendMessage({
-              role: "model",
+              role: "functionCall",
               parts: [
                 {
                   functionCall: {
@@ -805,7 +1040,7 @@ export class ChatPanel extends EventEmitter {
               ],
             });
             this.appendMessage({
-              role: "function",
+              role: "functionResponse",
               parts: [
                 {
                   functionResponse: {

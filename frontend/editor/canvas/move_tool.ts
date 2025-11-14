@@ -16,6 +16,7 @@ export class MoveTool {
       deltaX: number,
       deltaY: number,
     ) => void,
+    private readonly warning: (message: string) => void,
   ) {
     this.canvasContainer.addEventListener(
       "pointerdown",
@@ -43,11 +44,20 @@ export class MoveTool {
     if (event.button !== 0) {
       return;
     }
+    this.layers = this.getSelectedLayers().filter((layer) => !layer.locked);
+    if (this.layers.length === 0) {
+      this.warning("No movable layers selected.");
+      return;
+    }
+    if (this.layers.length < this.getSelectedLayers().length) {
+      this.warning("Some selected layers are locked and cannot be moved.");
+      // Continue with the unlocked layers
+    }
+
     event.preventDefault();
     this.isDragging = true;
     this.canvasContainer.setPointerCapture(event.pointerId);
     this.lastCanvasPoint = this.eventToCanvasPoint(event);
-    this.layers = this.getSelectedLayers();
     this.initialTransforms = this.layers.map((layer) => ({
       x: layer.transform.translateX,
       y: layer.transform.translateY,

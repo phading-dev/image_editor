@@ -17,6 +17,7 @@ export class PaintTool {
       oldImageData: ImageData,
       newImageData: ImageData,
     ) => void,
+    private readonly warning: (message: string) => void,
   ) {
     this.canvas.addEventListener("pointerdown", this.handlePointerDown);
     this.canvas.addEventListener("pointermove", this.handlePointerMove);
@@ -26,10 +27,18 @@ export class PaintTool {
   }
 
   private handlePointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0) {
+      return;
+    }
+    this.layer = this.getActiveLayer();
+    if (this.layer.locked) {
+      this.warning("Cannot paint on a locked layer.");
+      return;
+    }
+
     event.preventDefault();
     this.isPainting = true;
     this.canvas.setPointerCapture(event.pointerId);
-    this.layer = this.getActiveLayer();
     this.context = this.getActiveLayerContext();
     this.oldImageData = this.context.getImageData(
       0,

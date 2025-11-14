@@ -22,11 +22,19 @@ export interface LayerRow {
 export class LayerRow extends EventEmitter {
   public id: string;
   public element: HTMLDivElement;
+  private nameSpan: HTMLSpanElement;
+  private visibleSpan: HTMLSpanElement;
+  private opacitySpan: HTMLSpanElement;
+  private lockedSpan: HTMLSpanElement;
 
-  public constructor(layer: Layer) {
+  public constructor(private layer: Layer) {
     super();
     this.id = layer.id;
 
+    let nameSpanRef = new Ref<HTMLSpanElement>();
+    let visibleSpanRef = new Ref<HTMLSpanElement>();
+    let opacitySpanRef = new Ref<HTMLSpanElement>();
+    let lockedSpanRef = new Ref<HTMLSpanElement>();
     this.element = E.div(
       {
         style: [
@@ -49,18 +57,16 @@ export class LayerRow extends EventEmitter {
             "min-width:0",
           ].join(";"),
         },
-        E.span(
-          {
-            style: [
-              `font-size:${FONT_S}rem`,
-              "white-space:nowrap",
-              "overflow:hidden",
-              "text-overflow:ellipsis",
-              "flex:1",
-            ].join(";"),
-          },
-          E.text(layer.name),
-        ),
+        E.span({
+          ref: nameSpanRef,
+          style: [
+            `font-size:${FONT_S}rem`,
+            "white-space:nowrap",
+            "overflow:hidden",
+            "text-overflow:ellipsis",
+            "flex:1",
+          ].join(";"),
+        }),
       ),
       E.div(
         {
@@ -72,47 +78,47 @@ export class LayerRow extends EventEmitter {
             "justify-content:flex-end",
           ].join(";"),
         },
-        E.span(
-          {
-            style: [
-              `font-size:${FONT_S * 0.85}rem`,
-              `background:${COLOR_THEME.neutral3}`,
-              `color:${COLOR_THEME.neutral0}`,
-              "padding:0.125rem 0.375rem",
-              "border-radius:0.375rem",
-              "white-space:nowrap",
-            ].join(";"),
-          },
-          E.text(layer.visible ? "Visible" : "Hidden"),
-        ),
-        E.span(
-          {
-            style: [
-              `font-size:${FONT_S * 0.85}rem`,
-              `background:${COLOR_THEME.neutral3}`,
-              `color:${COLOR_THEME.neutral0}`,
-              "padding:0.125rem 0.375rem",
-              "border-radius:0.375rem",
-              "white-space:nowrap",
-            ].join(";"),
-          },
-          E.text(`${Math.round(layer.opacity)}%`),
-        ),
-        E.span(
-          {
-            style: [
-              `font-size:${FONT_S * 0.85}rem`,
-              `background:${COLOR_THEME.neutral3}`,
-              `color:${COLOR_THEME.neutral0}`,
-              "padding:0.125rem 0.375rem",
-              "border-radius:0.375rem",
-              "white-space:nowrap",
-            ].join(";"),
-          },
-          E.text(layer.locked ? "Locked" : "Unlocked"),
-        ),
+        E.span({
+          ref: visibleSpanRef,
+          style: [
+            `font-size:${FONT_S * 0.85}rem`,
+            `background:${COLOR_THEME.neutral3}`,
+            `color:${COLOR_THEME.neutral0}`,
+            "padding:0.125rem 0.375rem",
+            "border-radius:0.375rem",
+            "white-space:nowrap",
+          ].join(";"),
+        }),
+        E.span({
+          ref: opacitySpanRef,
+          style: [
+            `font-size:${FONT_S * 0.85}rem`,
+            `background:${COLOR_THEME.neutral3}`,
+            `color:${COLOR_THEME.neutral0}`,
+            "padding:0.125rem 0.375rem",
+            "border-radius:0.375rem",
+            "white-space:nowrap",
+          ].join(";"),
+        }),
+        E.span({
+          ref: lockedSpanRef,
+          style: [
+            `font-size:${FONT_S * 0.85}rem`,
+            `background:${COLOR_THEME.neutral3}`,
+            `color:${COLOR_THEME.neutral0}`,
+            "padding:0.125rem 0.375rem",
+            "border-radius:0.375rem",
+            "white-space:nowrap",
+          ].join(";"),
+        }),
       ),
     );
+    this.nameSpan = nameSpanRef.val;
+    this.visibleSpan = visibleSpanRef.val;
+    this.opacitySpan = opacitySpanRef.val;
+    this.lockedSpan = lockedSpanRef.val;
+    this.rerender();
+
     this.element.draggable = true;
     this.element.addEventListener("click", (event) => {
       this.emit("click", {
@@ -132,6 +138,13 @@ export class LayerRow extends EventEmitter {
     this.element.addEventListener("dragend", (event) => {
       this.emit("dragend", event);
     });
+  }
+
+  public rerender(): void {
+    this.nameSpan.textContent = this.layer.name;
+    this.visibleSpan.textContent = this.layer.visible ? "Visible" : "Hidden";
+    this.opacitySpan.textContent = `${Math.round(this.layer.opacity)}%`;
+    this.lockedSpan.textContent = this.layer.locked ? "Locked" : "Unlocked";
   }
 
   public setSelected(selected: boolean): this {
@@ -273,6 +286,10 @@ export class LayersPanel extends EventEmitter {
     let oldRow = this.layerRows.get(layerId);
     let newRow = beforeLayerId ? this.layerRows.get(beforeLayerId) : undefined;
     this.listContainer.insertBefore(oldRow.element, newRow?.element);
+  }
+
+  public rerenderLayerRow(layerId: string): void {
+    this.layerRows.get(layerId).rerender();
   }
 
   private updateEmptyState(): void {

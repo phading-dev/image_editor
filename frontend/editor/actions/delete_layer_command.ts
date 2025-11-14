@@ -6,19 +6,17 @@ import { Layer } from "../project_metadata";
 
 export class DeleteLayerCommand implements Command {
   private layerIndex: number;
-  private layerToDelete: Layer;
   private canvasToDelete: HTMLCanvasElement;
 
   public constructor(
     private project: Project,
-    layerIdToDelete: string,
+    private layerToDelete: Layer,
     private layersPanel: LayersPanel,
     private mainCanvasPanel: MainCanvasPanel,
   ) {
     this.layerIndex = this.project.metadata.layers.findIndex(
-      (layer) => layer.id === layerIdToDelete,
+      (layer) => layer.id === layerToDelete.id,
     );
-    this.layerToDelete = this.project.metadata.layers[this.layerIndex];
     this.canvasToDelete = this.project.layersToCanvas.get(
       this.layerToDelete.id,
     );

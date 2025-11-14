@@ -20,6 +20,7 @@ export interface MainCanvasPanel {
     event: "move",
     listener: (layers: Layer[], deltaX: number, deltaY: number) => void,
   ): this;
+  on(event: "warning", listener: (message: string) => void): this;
 }
 
 export class MainCanvasPanel extends EventEmitter {
@@ -148,6 +149,7 @@ export class MainCanvasPanel extends EventEmitter {
           () => this.rerender(),
           (context, oldImageData, newImageData) =>
             this.emit("paint", context, oldImageData, newImageData),
+          (message: string) => this.emit("warning", message),
         );
       },
       () => {
@@ -165,6 +167,7 @@ export class MainCanvasPanel extends EventEmitter {
           () => this.getSelectedLayers(),
           () => this.rerender(),
           (layers, deltaX, deltaY) => this.emit("move", layers, deltaX, deltaY),
+          (message: string) => this.emit("warning", message),
         );
       },
       () => {

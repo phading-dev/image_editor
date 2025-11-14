@@ -1,9 +1,14 @@
 import { COLOR_THEME } from "../color_theme";
 import { AddLayerCommand } from "./actions/add_layer_command";
 import { DeleteLayerCommand } from "./actions/delete_layer_command";
+import { HideLayersCommand } from "./actions/hide_layers_command";
+import { LockLayersCommand } from "./actions/lock_layers_command";
 import { MoveCommand } from "./actions/move_command";
 import { PaintCommand } from "./actions/paint_command";
+import { RenameLayerCommand } from "./actions/rename_layer_command";
 import { ReorderLayerCommand } from "./actions/reorder_layer_command";
+import { ShowLayersCommand } from "./actions/show_layers_command";
+import { UnlockLayersCommand } from "./actions/unlock_layers_command";
 import { MainCanvasPanel } from "./canvas/main_canvas_panel";
 import { ChatPanel } from "./chat_panel";
 import { CommandHistoryManager } from "./command_history_manager";
@@ -160,6 +165,12 @@ export class Editor {
     this.mainCanvasPanel
       .setGetActiveLayerId(() => this.layersPanel.activeLayerId)
       .setGetSelectedLayerIds(() => this.layersPanel.selectedLayerIds)
+      .on("warning", (message: string) => {
+        this.chatPanel.appendMessage({
+          role: "warning",
+          parts: [{ text: message }],
+        });
+      })
       .on("paint", (context, oldImageData, newImageData) => {
         this.commandHistoryManager.pushCommand(
           new PaintCommand(
@@ -213,16 +224,6 @@ export class Editor {
       .setRedoHandler(() => {
         this.commandHistoryManager.redo();
       })
-      .setDeleteSelectedLayerHandler(() => {
-        this.commandHistoryManager.pushCommand(
-          new DeleteLayerCommand(
-            this.project,
-            this.layersPanel.activeLayerId,
-            this.layersPanel,
-            this.mainCanvasPanel,
-          ),
-        );
-      })
       .setAddNewLayerHandler(() => {
         let canvas = document.createElement("canvas");
         canvas.width = this.project.metadata.width;
@@ -250,6 +251,110 @@ export class Editor {
             this.layersPanel,
             this.mainCanvasPanel,
           ),
+        );
+      })
+      .setDeleteActiveLayerHandler(() => {
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        if (layer.locked) {
+          this.chatPanel.appendMessage({
+            role: "warning",
+            parts: [
+              { text: "The active layer is locked and cannot be deleted." },
+            ],
+          });
+          return;
+        }
+        this.commandHistoryManager.pushCommand(
+          new DeleteLayerCommand(
+            this.project,
+            layer,
+            this.layersPanel,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setLockSelectedLayersHandler(() => {
+        const selectedLayers = this.layersPanel.selectedLayerIds;
+        const layers = this.project.metadata.layers
+          .filter((layer) => this.layersPanel.selectedLayerIds.has(layer.id))
+          .filter((layer) => !layer.locked);
+        if (layers.length === 0) {
+          this.chatPanel.appendMessage({
+            role: "warning",
+            parts: [{ text: "All selected layers are already locked." }],
+          });
+          return;
+        }
+        if (layers.length < selectedLayers.size) {
+          this.chatPanel.appendMessage({
+            role: "warning",
+            parts: [
+              {
+                text: "Some selected layers are already locked and were skipped.",
+              },
+            ],
+          });
+        }
+        this.commandHistoryManager.pushCommand(
+          new LockLayersCommand(layers, this.layersPanel),
+        );
+      })
+      .setUnlockSelectedLayersHandler(() => {
+        const selectedLayers = this.layersPanel.selectedLayerIds;
+        const layers = this.project.metadata.layers
+          .filter((layer) => selectedLayers.has(layer.id))
+          .filter((layer) => layer.locked);
+        if (layers.length === 0) {
+          this.chatPanel.appendMessage({
+            role: "warning",
+            parts: [
+              {
+                text: "All selected layers are already unlocked.",
+              },
+            ],
+          });
+          return;
+        }
+        if (layers.length < selectedLayers.size) {
+          this.chatPanel.appendMessage({
+            role: "warning",
+            parts: [
+              {
+                text: "Some selected layers are already unlocked and were skipped.",
+              },
+            ],
+          });
+        }
+        this.commandHistoryManager.pushCommand(
+          new UnlockLayersCommand(layers, this.layersPanel),
+        );
+      })
+      .setShowSelectedLayersHandler(() => {
+        const selectedLayers = this.layersPanel.selectedLayerIds;
+        const layers = this.project.metadata.layers
+          .filter((layer) => selectedLayers.has(layer.id))
+          .filter((layer) => !layer.visible);
+        this.commandHistoryManager.pushCommand(
+          new ShowLayersCommand(layers, this.layersPanel, this.mainCanvasPanel),
+        );
+      })
+      .setHideSelectedLayersHandler(() => {
+        const selectedLayers = this.layersPanel.selectedLayerIds;
+        const layers = this.project.metadata.layers
+          .filter((layer) => selectedLayers.has(layer.id))
+          .filter((layer) => layer.visible);
+        this.commandHistoryManager.pushCommand(
+          new HideLayersCommand(layers, this.layersPanel, this.mainCanvasPanel),
+        );
+      })
+      .setRenameActiveLayerHandler((newName: string) => {
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        this.commandHistoryManager.pushCommand(
+          new RenameLayerCommand(layer, newName, this.layersPanel),
         );
       })
       .setSelectMoveToolHandler(() => {
