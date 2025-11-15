@@ -1,18 +1,20 @@
 import { COLOR_THEME } from "../color_theme";
-import { AddLayerCommand } from "./actions/add_layer_command";
-import { DeleteLayerCommand } from "./actions/delete_layer_command";
-import { HideLayersCommand } from "./actions/hide_layers_command";
-import { LockLayersCommand } from "./actions/lock_layers_command";
-import { MoveCommand } from "./actions/move_command";
-import { PaintCommand } from "./actions/paint_command";
-import { RenameLayerCommand } from "./actions/rename_layer_command";
-import { ReorderLayerCommand } from "./actions/reorder_layer_command";
-import { ShowLayersCommand } from "./actions/show_layers_command";
-import { UnlockLayersCommand } from "./actions/unlock_layers_command";
 import { MainCanvasPanel } from "./canvas/main_canvas_panel";
 import { ChatPanel } from "./chat_panel";
 import { CommandHistoryManager } from "./command_history_manager";
+import { AddLayerCommand } from "./commands/add_layer_command";
+import { DeleteLayerCommand } from "./commands/delete_layer_command";
+import { HideLayersCommand } from "./commands/hide_layers_command";
+import { LockLayersCommand } from "./commands/lock_layers_command";
+import { MoveCommand } from "./commands/move_command";
+import { PaintCommand } from "./commands/paint_command";
+import { RenameLayerCommand } from "./commands/rename_layer_command";
+import { ReorderLayerCommand } from "./commands/reorder_layer_command";
+import { SetLayerOpacityCommand } from "./commands/set_layer_opacity_command";
+import { ShowLayersCommand } from "./commands/show_layers_command";
+import { UnlockLayersCommand } from "./commands/unlock_layers_command";
 import { LayersPanel } from "./layers_panel";
+import { SliderPopup } from "./popup/slider_popup";
 import { Project } from "./project";
 import { saveToZip } from "./project_serializer";
 import { E } from "@selfage/element/factory";
@@ -95,6 +97,7 @@ export class Editor {
       MainCanvasPanel.create,
       LayersPanel.create,
       CommandHistoryManager.create,
+      SliderPopup.create,
       project,
       loadProject,
     );
@@ -113,6 +116,7 @@ export class Editor {
     private readonly createMainCanvasPanel: typeof MainCanvasPanel.create,
     private readonly createLayersPanel: typeof LayersPanel.create,
     private readonly createCommandHistoryManager: typeof CommandHistoryManager.create,
+    private readonly createSliderPopup: typeof SliderPopup.create,
     private readonly project: Project,
     private readonly loadProject: () => void,
   ) {
@@ -151,17 +155,21 @@ export class Editor {
       this.layersPanel.element,
     );
 
-    this.layersPanel.on("reorder", (oldIndex, newIndex) => {
-      this.commandHistoryManager.pushCommand(
-        new ReorderLayerCommand(
-          this.project,
-          oldIndex,
-          newIndex,
-          this.layersPanel,
-          this.mainCanvasPanel,
-        ),
-      );
-    });
+    this.layersPanel
+      .on("reorder", (oldIndex, newIndex) => {
+        this.commandHistoryManager.pushCommand(
+          new ReorderLayerCommand(
+            this.project,
+            oldIndex,
+            newIndex,
+            this.layersPanel,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .on("layerSelectionChanged", () => {
+        this.mainCanvasPanel.rerender();
+      });
     this.mainCanvasPanel
       .setGetActiveLayerId(() => this.layersPanel.activeLayerId)
       .setGetSelectedLayerIds(() => this.layersPanel.selectedLayerIds)
@@ -205,6 +213,9 @@ export class Editor {
       })
       .setLoadProjectHandler(() => {
         this.loadProject();
+      })
+      .setDescribeProjectHandler(() => {
+        return JSON.stringify(this.project.metadata);
       })
       .setRenameProjectHandler((name: string) => {
         this.project.metadata.name = name;
@@ -357,13 +368,57 @@ export class Editor {
           new RenameLayerCommand(layer, newName, this.layersPanel),
         );
       })
+      .setSetActiveLayerOpacityHandler((newOpacity: number) => {
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        this.commandHistoryManager.pushCommand(
+          new SetLayerOpacityCommand(
+            layer,
+            layer.opacity,
+            newOpacity,
+            this.layersPanel,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setOpenPopupToSetActiveLayerOpacityHandler(() => {
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        let sliderPopup = this.createSliderPopup(
+          "Set Layer Opacity",
+          layer.opacity,
+          0,
+          100,
+          "%",
+        )
+          .on("change", (newOpacity: number) => {
+            layer.opacity = newOpacity;
+            this.layersPanel.rerenderLayerRow(layer.id);
+            this.mainCanvasPanel.rerender();
+          })
+          .on("commit", (oldOpacity: number, newOpacity: number) => {
+            this.commandHistoryManager.pushCommand(
+              new SetLayerOpacityCommand(
+                layer,
+                oldOpacity,
+                newOpacity,
+                this.layersPanel,
+                this.mainCanvasPanel,
+              ),
+            );
+          });
+        this.element.append(sliderPopup.element);
+      })
       .setSelectMoveToolHandler(() => {
         this.mainCanvasPanel.selectMoveTool();
       })
       .setSelectPaintToolHandler(() => {
         this.mainCanvasPanel.selectPaintTool();
-      })
-      .initialGreet();
+      });
+    this.mainCanvasPanel.rerender();
+    this.chatPanel.initialGreet();
   }
 
   public remove(): void {

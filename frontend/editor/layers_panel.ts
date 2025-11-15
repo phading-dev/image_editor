@@ -165,6 +165,7 @@ export interface LayersPanel {
     event: "reorder",
     listener: (oldIndex: number, newIndex: number) => void,
   ): this;
+  on(event: "layerSelectionChanged", listener: () => void): this;
 }
 
 export class LayersPanel extends EventEmitter {
@@ -272,6 +273,7 @@ export class LayersPanel extends EventEmitter {
     this.layerRows.set(row.id, row);
     this.selectExclusiveLayer(row);
     this.emptyState.style.display = "none";
+    this.emit("layerSelectionChanged");
   }
 
   public deleteLayerRow(layerId: string): void {
@@ -280,6 +282,7 @@ export class LayersPanel extends EventEmitter {
     this.layerRows.delete(layerId);
     this.selectedLayerIds.delete(layerId);
     this.updateEmptyState();
+    this.emit("layerSelectionChanged");
   }
 
   public moveLayerRowBefore(layerId: string, beforeLayerId?: string): void {
@@ -323,6 +326,7 @@ export class LayersPanel extends EventEmitter {
           this.selectedLayerIds.add(row.id);
         }
       }
+      this.emit("layerSelectionChanged");
     });
   }
 

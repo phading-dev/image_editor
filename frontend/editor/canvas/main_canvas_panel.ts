@@ -5,6 +5,7 @@ import { Layer } from "../project_metadata";
 import { MoveTool } from "./move_tool";
 import { PaintTool } from "./paint_tool";
 import { E } from "@selfage/element/factory";
+import { Ref } from "@selfage/ref";
 import { TabsSwitcher } from "@selfage/tabs/switcher";
 
 export interface MainCanvasPanel {
@@ -30,7 +31,10 @@ export class MainCanvasPanel extends EventEmitter {
 
   public readonly element: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
+  private readonly canvasContainer: HTMLDivElement;
+  private readonly activeLayerOutline: HTMLDivElement;
   private readonly context: CanvasRenderingContext2D;
+  private scaleFactor = 1.0;
   private getActiveLayerId: () => string;
   private getSelectedLayerIds: () => Set<string>;
   private paintTool: PaintTool;
@@ -39,16 +43,10 @@ export class MainCanvasPanel extends EventEmitter {
 
   public constructor(private project: Project) {
     super();
-    this.canvas = E.canvas({
-      style: [
-        "margin: auto;",
-        "width: " + this.project.metadata.width + "px",
-        "height: " + this.project.metadata.height + "px",
-      ].join("; "),
-    });
-    this.canvas.width = this.project.metadata.width;
-    this.canvas.height = this.project.metadata.height;
-    this.context = this.canvas.getContext("2d");
+    let canvasRef = new Ref<HTMLCanvasElement>();
+    let canvasContainerRef = new Ref<HTMLDivElement>();
+    let activeLayerOutlineRef = new Ref<HTMLDivElement>();
+
     this.element = E.div(
       {
         style: [
@@ -62,9 +60,55 @@ export class MainCanvasPanel extends EventEmitter {
           "touch-action: none",
         ].join("; "),
       },
-      this.canvas,
+      E.div(
+        {
+          ref: canvasContainerRef,
+          style: [
+            "position: relative",
+            "margin: auto",
+            "width: " + this.project.metadata.width + "px",
+            "height: " + this.project.metadata.height + "px",
+          ].join("; "),
+        },
+        E.canvas({
+          ref: canvasRef,
+          style: "width: 100%; height: 100%;",
+        }),
+        E.div({
+          ref: activeLayerOutlineRef,
+          style: [
+            "position: absolute",
+            "pointer-events: none",
+            `border: 2px dashed ${COLOR_THEME.neutral3}`,
+            "display: none",
+          ].join("; "),
+        }),
+      ),
     );
-    this.rerender();
+    if (
+      !canvasRef.val ||
+      !canvasContainerRef.val ||
+      !activeLayerOutlineRef.val
+    ) {
+      throw new Error("MainCanvasPanel failed to initialize DOM refs.");
+    }
+    this.canvas = canvasRef.val;
+    this.canvasContainer = canvasContainerRef.val;
+    this.activeLayerOutline = activeLayerOutlineRef.val;
+
+    this.canvas.width = this.project.metadata.width;
+    this.canvas.height = this.project.metadata.height;
+    this.context = this.canvas.getContext("2d");
+  }
+
+  public rerender(): void {
+    this.canvasContainer.style.width = `${this.project.metadata.width * this.scaleFactor}px`;
+    this.canvasContainer.style.height = `${this.project.metadata.height * this.scaleFactor}px`;
+    this.drawActiveLayerOutline();
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // Draw checkerboard pattern to indicate transparency
+    this.drawCheckerboard();
+    this.render(this.context);
   }
 
   private drawCheckerboard(): void {
@@ -81,13 +125,6 @@ export class MainCanvasPanel extends EventEmitter {
         this.context.fillRect(x, y, squareSize, squareSize);
       }
     }
-  }
-
-  public rerender(): void {
-    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    // Draw checkerboard pattern to indicate transparency
-    this.drawCheckerboard();
-    this.render(this.context);
   }
 
   private render(context: CanvasRenderingContext2D): void {
@@ -108,6 +145,36 @@ export class MainCanvasPanel extends EventEmitter {
       context.drawImage(layerCanvas, 0, 0);
       context.restore();
     }
+  }
+
+  private drawActiveLayerOutline(): void {
+    const activeLayer = this.getActiveLayer();
+    if (!activeLayer) {
+      this.activeLayerOutline.style.display = "none";
+      return;
+    }
+
+    // Calculate the bounding box of the layer after transformations
+    const transform = activeLayer.transform;
+    const width = activeLayer.width * transform.scaleX;
+    const height = activeLayer.height * transform.scaleY;
+    const x = transform.translateX;
+    const y = transform.translateY;
+
+    // Add a small offset so the outline is visible around the layer edges
+    const outlineOffset = 2; // pixels at 1x scale
+
+    // Position and size the outline (in canvas coordinates, will scale with container)
+    this.activeLayerOutline.style.left = `${(x - outlineOffset) * this.scaleFactor}px`;
+    this.activeLayerOutline.style.top = `${(y - outlineOffset) * this.scaleFactor}px`;
+    this.activeLayerOutline.style.width = `${width * this.scaleFactor}px`;
+    this.activeLayerOutline.style.height = `${height * this.scaleFactor}px`;
+    this.activeLayerOutline.style.display = "block";
+  }
+
+  public scale(factor: number): void {
+    this.scaleFactor = factor;
+    this.rerender();
   }
 
   public setGetActiveLayerId(getActiveLayerId: () => string): this {

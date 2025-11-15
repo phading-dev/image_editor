@@ -101,7 +101,7 @@ export class ChatPanel extends EventEmitter {
           ref: inputRef,
           class: "chat-panel__input",
           rows: "1",
-          placeholder: "Type a prompt…",
+          placeholder: "Ask me anything...",
           style: [
             "width:100%",
             `background-color:transparent`,
@@ -369,6 +369,11 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setDescribeProjectHandler(handler: () => string): this {
+    this.registeredFunctionHandlers["describeProject"] = handler;
+    return this;
+  }
+
   public setExportImageHandler(
     handler: (filename: string, imageType: string) => Promise<void>,
   ): this {
@@ -421,6 +426,19 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setSetActiveLayerOpacityHandler(
+    handler: (newOpacity: number) => void,
+  ): this {
+    this.registeredFunctionHandlers["setActiveLayerOpacity"] = handler;
+    return this;
+  }
+
+  public setOpenPopupToSetActiveLayerOpacityHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["openPopupToSetActiveLayerOpacity"] =
+      handler;
+    return this;
+  }
+
   public setSelectMoveToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectMoveTool"] = handler;
     return this;
@@ -463,6 +481,11 @@ export class ChatPanel extends EventEmitter {
                   name: "saveProject",
                   description:
                     "Save the current project to a zip file. A file picker may or may not appear depending on the browser.",
+                },
+                {
+                  name: "describeProject",
+                  description:
+                    "Get every detail about the current project as a JSON string, only excluding image data.",
                 },
                 {
                   name: "renameProject",
@@ -542,6 +565,26 @@ export class ChatPanel extends EventEmitter {
                     },
                     required: ["newName"],
                   },
+                },
+                {
+                  name: "setActiveLayerOpacity",
+                  description: "Set the opacity of the currently active layer",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      newOpacity: {
+                        type: "number",
+                        description:
+                          "The new opacity for the active layer (0 to 100)",
+                      },
+                    },
+                    required: ["newOpacity"],
+                  },
+                },
+                {
+                  name: "openPopupToSetActiveLayerOpacity",
+                  description:
+                    "Open the popup for setting the active layer's opacity",
                 },
                 {
                   name: "selectMoveTool",
@@ -654,6 +697,34 @@ export class ChatPanel extends EventEmitter {
                     name: "saveProject",
                     response: {
                       success: true,
+                    },
+                  },
+                },
+              ],
+            });
+            return true;
+          case "describeProject":
+            let description =
+              this.registeredFunctionHandlers["describeProject"]();
+            this.appendMessage({
+              role: "functionCall",
+              parts: [
+                {
+                  functionCall: {
+                    name: "describeProject",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "functionResponse",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "describeProject",
+                    response: {
+                      description: description,
                     },
                   },
                 },
@@ -998,6 +1069,83 @@ export class ChatPanel extends EventEmitter {
                 ],
               });
             }
+            return true;
+          case "setActiveLayerOpacity":
+            let newOpacity = functionCall.args?.newOpacity;
+            this.appendMessage({
+              role: "functionCall",
+              parts: [
+                {
+                  functionCall: {
+                    name: "setActiveLayerOpacity",
+                    args: { newOpacity: newOpacity },
+                  },
+                },
+              ],
+            });
+            if (typeof newOpacity === "number") {
+              this.registeredFunctionHandlers["setActiveLayerOpacity"](
+                newOpacity,
+              );
+              this.appendMessage({
+                role: "functionResponse",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "setActiveLayerOpacity",
+                      response: {
+                        success: true,
+                      },
+                    },
+                  },
+                ],
+              });
+            } else {
+              this.appendMessage({
+                role: "functionResponse",
+                parts: [
+                  {
+                    functionResponse: {
+                      name: "setActiveLayerOpacity",
+                      response: {
+                        success: false,
+                        error:
+                          "Failed to set active layer opacity: newOpacity parameter is required.",
+                      },
+                    },
+                  },
+                ],
+              });
+            }
+            return true;
+          case "openPopupToSetActiveLayerOpacity":
+            this.registeredFunctionHandlers[
+              "openPopupToSetActiveLayerOpacity"
+            ]();
+            this.appendMessage({
+              role: "functionCall",
+              parts: [
+                {
+                  functionCall: {
+                    name: "openPopupToSetActiveLayerOpacity",
+                    args: {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "functionResponse",
+              parts: [
+                {
+                  functionResponse: {
+                    name: "openPopupToSetActiveLayerOpacity",
+                    response: {
+                      success: true,
+                    },
+                  },
+                },
+              ],
+            });
             return true;
           case "selectMoveTool":
             this.registeredFunctionHandlers["selectMoveTool"]();
