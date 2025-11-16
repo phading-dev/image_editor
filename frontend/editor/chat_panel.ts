@@ -243,6 +243,33 @@ export class ChatPanel extends EventEmitter {
       event.preventDefault();
       this.registeredFunctionHandlers["saveProject"]();
     }
+    // Handle Ctrl+O (load)
+    else if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key === "o" &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      this.registeredFunctionHandlers["loadProject"]();
+    }
+    // Handle Ctrl+"+" (zoom in)
+    else if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key === "+" &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      this.registeredFunctionHandlers["zoomIn"]();
+    }
+    // Handle Ctrl+"-" (zoom out)
+    else if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key === "-" &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      this.registeredFunctionHandlers["zoomOut"]();
+    }
   };
 
   private adjustInputHeight(): void {
@@ -364,6 +391,11 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setNewProjectHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["newProject"] = handler;
+    return this;
+  }
+
   public setRenameProjectHandler(handler: (name: string) => void): this {
     this.registeredFunctionHandlers["renameProject"] = handler;
     return this;
@@ -401,12 +433,16 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
-  public setLockSelectedLayersHandler(handler: () => void): this {
+  public setLockSelectedLayersHandler(
+    handler: () => { warning: string },
+  ): this {
     this.registeredFunctionHandlers["lockSelectedLayers"] = handler;
     return this;
   }
 
-  public setUnlockSelectedLayersHandler(handler: () => void): this {
+  public setUnlockSelectedLayersHandler(
+    handler: () => { warning: string },
+  ): this {
     this.registeredFunctionHandlers["unlockSelectedLayers"] = handler;
     return this;
   }
@@ -439,6 +475,21 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setZoomInHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["zoomIn"] = handler;
+    return this;
+  }
+
+  public setZoomOutHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["zoomOut"] = handler;
+    return this;
+  }
+
+  public setSetZoomHandler(handler: (scale: number) => void): this {
+    this.registeredFunctionHandlers["setZoom"] = handler;
+    return this;
+  }
+
   public setSelectMoveToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectMoveTool"] = handler;
     return this;
@@ -463,8 +514,10 @@ export class ChatPanel extends EventEmitter {
                   "Your role is to help users edit images by interpreting their requests and calling the appropriate functions.",
                   "The application has layers (like Photoshop), and users can work on an active layer and manage layers.",
                   "When users ask to perform actions, use the available functions to execute them.",
-                  "Be concise and friendly in your responses.",
                   "Shortcuts are available for undo (Ctrl+Z), redo (Ctrl+Y or Ctrl+Shift+Z), and save (Ctrl+S).",
+                  "Popup can be closed by clicking or typing outside or pressing Escape.",
+                  "Multi-selecting layers can be done by holding down Shift while clicking on layers.",
+                  "Be concise and friendly in your responses.",
                 ].join(" "),
               },
             ],
@@ -473,14 +526,18 @@ export class ChatPanel extends EventEmitter {
             {
               functionDeclarations: [
                 {
+                  name: "saveProject",
+                  description:
+                    "Save the current project to a zip file. A file picker may or may not appear depending on the browser.",
+                },
+                {
                   name: "loadProject",
                   description:
                     "Launch a file picker to open a project from a zip file. A file may or may not be selected depending on the user.",
                 },
                 {
-                  name: "saveProject",
-                  description:
-                    "Save the current project to a zip file. A file picker may or may not appear depending on the browser.",
+                  name: "newProject",
+                  description: "Create a new project with default settings.",
                 },
                 {
                   name: "describeProject",
@@ -489,13 +546,13 @@ export class ChatPanel extends EventEmitter {
                 },
                 {
                   name: "renameProject",
-                  description: "Rename the current project",
+                  description: "Rename the current project.",
                   parameters: {
                     type: "object",
                     properties: {
                       name: {
                         type: "string",
-                        description: "The new name for the project",
+                        description: "The new name for the project.",
                       },
                     },
                     required: ["name"],
@@ -522,45 +579,45 @@ export class ChatPanel extends EventEmitter {
                 },
                 {
                   name: "undo",
-                  description: "Undo the last action",
+                  description: "Undo the last action.",
                 },
                 {
                   name: "redo",
-                  description: "Redo the last undone action",
+                  description: "Redo the last undone action.",
                 },
                 {
                   name: "addNewLayer",
-                  description: "Add a new layer to the project",
+                  description: "Add a new layer to the project.",
                 },
                 {
                   name: "deleteActiveLayer",
-                  description: "Delete the currently active layer",
+                  description: "Delete the currently active layer.",
                 },
                 {
                   name: "lockSelectedLayers",
-                  description: "Lock the currently selected layers",
+                  description: "Lock the currently selected layers.",
                 },
                 {
                   name: "unlockSelectedLayers",
-                  description: "Unlock the currently selected layers",
+                  description: "Unlock the currently selected layers.",
                 },
                 {
                   name: "showSelectedLayers",
-                  description: "Make the currently selected layers visible",
+                  description: "Make the currently selected layers visible.",
                 },
                 {
                   name: "hideSelectedLayers",
-                  description: "Make the currently selected layers invisible",
+                  description: "Make the currently selected layers invisible.",
                 },
                 {
                   name: "renameActiveLayer",
-                  description: "Rename the currently active layer",
+                  description: "Rename the currently active layer.",
                   parameters: {
                     type: "object",
                     properties: {
                       newName: {
                         type: "string",
-                        description: "The new name for the active layer",
+                        description: "The new name for the active layer.",
                       },
                     },
                     required: ["newName"],
@@ -568,14 +625,14 @@ export class ChatPanel extends EventEmitter {
                 },
                 {
                   name: "setActiveLayerOpacity",
-                  description: "Set the opacity of the currently active layer",
+                  description: "Set the opacity of the currently active layer.",
                   parameters: {
                     type: "object",
                     properties: {
                       newOpacity: {
                         type: "number",
                         description:
-                          "The new opacity for the active layer (0 to 100)",
+                          "The new opacity for the active layer (0 to 100).",
                       },
                     },
                     required: ["newOpacity"],
@@ -584,17 +641,39 @@ export class ChatPanel extends EventEmitter {
                 {
                   name: "openPopupToSetActiveLayerOpacity",
                   description:
-                    "Open the popup for setting the active layer's opacity",
+                    "Open the popup for setting the active layer's opacity.",
+                },
+                {
+                  name: "zoomIn",
+                  description: "Zoom in the canvas view.",
+                },
+                {
+                  name: "zoomOut",
+                  description: "Zoom out the canvas view.",
+                },
+                {
+                  name: "setZoom",
+                  description: "Set the canvas zoom level.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      scale: {
+                        type: "number",
+                        description: "The zoom level to set in percentage.",
+                      },
+                    },
+                    required: ["scale"],
+                  },
                 },
                 {
                   name: "selectMoveTool",
                   description:
-                    "Switch to the move tool to reposition the images of all selected layers",
+                    "Switch to the move tool to reposition the images of all selected layers.",
                 },
                 {
                   name: "selectPaintTool",
                   description:
-                    "Switch to the paint/brush tool for drawing on the active layer",
+                    "Switch to the paint/brush tool for drawing on the active layer.",
                 },
               ],
             },
@@ -649,564 +728,206 @@ export class ChatPanel extends EventEmitter {
 
         // Emit events based on function name
         switch (functionCall.name) {
-          case "loadProject":
-            this.registeredFunctionHandlers["loadProject"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "loadProject",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "loadProject",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
-            return true;
           case "saveProject":
-            await this.registeredFunctionHandlers["saveProject"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "saveProject",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "saveProject",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "saveProject",
+              {},
+              this.registeredFunctionHandlers["saveProject"],
+            );
+            return true;
+          case "loadProject":
+            await this.toolCall(
+              "loadProject",
+              {},
+              this.registeredFunctionHandlers["loadProject"],
+            );
+            return true;
+          case "newProject":
+            await this.toolCall(
+              "newProject",
+              {},
+              this.registeredFunctionHandlers["newProject"],
+            );
             return true;
           case "describeProject":
-            let description =
-              this.registeredFunctionHandlers["describeProject"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "describeProject",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "describeProject",
-                    response: {
-                      description: description,
-                    },
-                  },
-                },
-              ],
+            await this.toolCall("describeProject", {}, () => {
+              let description =
+                this.registeredFunctionHandlers["describeProject"]();
+              return {
+                description: description,
+              };
             });
             return true;
           case "renameProject":
-            let name = functionCall.args?.name;
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "renameProject",
-                    args: { name: name },
-                  },
-                },
-              ],
+            await this.toolCall("renameProject", functionCall.args, () => {
+              if (!functionCall.args?.name) {
+                throw new Error("name parameter is required.");
+              }
+              this.registeredFunctionHandlers["renameProject"](
+                functionCall.args.name,
+              );
             });
-            if (name) {
-              this.registeredFunctionHandlers["renameProject"](name);
-              this.appendMessage({
-                role: "functionResponse",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "renameProject",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              });
-            } else {
-              this.appendMessage({
-                role: "functionResponse",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "renameProject",
-                      response: {
-                        success: false,
-                        error: "Failed to rename: name parameter is required.",
-                      },
-                    },
-                  },
-                ],
-              });
-            }
             return true;
           case "exportImage":
-            let filename = functionCall.args?.filename ?? "export.png";
-            let imageType = functionCall.args?.imageType ?? "png";
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "exportImage",
-                    args: { filename: filename, imageType: imageType },
-                  },
-                },
-              ],
-            });
-            await this.registeredFunctionHandlers["exportImage"](
-              filename,
-              imageType,
-            );
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "exportImage",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
+            await this.toolCall("exportImage", functionCall.args, () => {
+              let filename = functionCall.args?.filename ?? "export.png";
+              let imageType = functionCall.args?.imageType ?? "png";
+              this.registeredFunctionHandlers["exportImage"](
+                filename,
+                imageType,
+              );
             });
             return true;
           case "undo":
-            this.registeredFunctionHandlers["undo"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "undo",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "undo",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "undo",
+              {},
+              this.registeredFunctionHandlers["undo"],
+            );
             return true;
           case "redo":
-            this.registeredFunctionHandlers["redo"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "redo",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "redo",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "redo",
+              {},
+              this.registeredFunctionHandlers["redo"],
+            );
             return true;
           case "addNewLayer":
-            this.registeredFunctionHandlers["addNewLayer"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "addNewLayer",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "addNewLayer",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "addNewLayer",
+              {},
+              this.registeredFunctionHandlers["addNewLayer"],
+            );
             return true;
           case "deleteActiveLayer":
-            this.registeredFunctionHandlers["deleteActiveLayer"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "deleteActiveLayer",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "deleteActiveLayer",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "deleteActiveLayer",
+              {},
+              this.registeredFunctionHandlers["deleteActiveLayer"],
+            );
             return true;
           case "lockSelectedLayers":
-            this.registeredFunctionHandlers["lockSelectedLayers"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "lockSelectedLayers",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "lockSelectedLayers",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "lockSelectedLayers",
+              {},
+              this.registeredFunctionHandlers["lockSelectedLayers"],
+            );
             return true;
           case "unlockSelectedLayers":
-            this.registeredFunctionHandlers["unlockSelectedLayers"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "unlockSelectedLayers",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "unlockSelectedLayers",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "unlockSelectedLayers",
+              {},
+              this.registeredFunctionHandlers["unlockSelectedLayers"],
+            );
             return true;
           case "showSelectedLayers":
-            this.registeredFunctionHandlers["showSelectedLayers"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "showSelectedLayers",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "showSelectedLayers",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "showSelectedLayers",
+              {},
+              this.registeredFunctionHandlers["showSelectedLayers"],
+            );
             return true;
           case "hideSelectedLayers":
-            this.registeredFunctionHandlers["hideSelectedLayers"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "hideSelectedLayers",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "hideSelectedLayers",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "hideSelectedLayers",
+              {},
+              this.registeredFunctionHandlers["hideSelectedLayers"],
+            );
             return true;
           case "renameActiveLayer":
-            let newName = functionCall.args?.newName;
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "renameActiveLayer",
-                    args: { newName: newName },
-                  },
-                },
-              ],
+            await this.toolCall("renameActiveLayer", functionCall.args, () => {
+              if (!functionCall.args?.newName) {
+                throw new Error("newName parameter is required.");
+              }
+              this.registeredFunctionHandlers["renameActiveLayer"](
+                functionCall.args.newName,
+              );
             });
-            if (newName) {
-              this.registeredFunctionHandlers["renameActiveLayer"](newName);
-              this.appendMessage({
-                role: "functionResponse",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "renameActiveLayer",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              });
-            } else {
-              this.appendMessage({
-                role: "functionResponse",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "renameActiveLayer",
-                      response: {
-                        success: false,
-                        error:
-                          "Failed to rename active layer: newName parameter is required.",
-                      },
-                    },
-                  },
-                ],
-              });
-            }
             return true;
           case "setActiveLayerOpacity":
-            let newOpacity = functionCall.args?.newOpacity;
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "setActiveLayerOpacity",
-                    args: { newOpacity: newOpacity },
-                  },
-                },
-              ],
-            });
-            if (typeof newOpacity === "number") {
-              this.registeredFunctionHandlers["setActiveLayerOpacity"](
-                newOpacity,
-              );
-              this.appendMessage({
-                role: "functionResponse",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "setActiveLayerOpacity",
-                      response: {
-                        success: true,
-                      },
-                    },
-                  },
-                ],
-              });
-            } else {
-              this.appendMessage({
-                role: "functionResponse",
-                parts: [
-                  {
-                    functionResponse: {
-                      name: "setActiveLayerOpacity",
-                      response: {
-                        success: false,
-                        error:
-                          "Failed to set active layer opacity: newOpacity parameter is required.",
-                      },
-                    },
-                  },
-                ],
-              });
-            }
+            await this.toolCall(
+              "setActiveLayerOpacity",
+              functionCall.args,
+              () => {
+                if (typeof functionCall.args?.newOpacity !== "number") {
+                  throw new Error("newOpacity parameter is required.");
+                }
+                this.registeredFunctionHandlers["setActiveLayerOpacity"](
+                  functionCall.args.newOpacity,
+                );
+              },
+            );
             return true;
           case "openPopupToSetActiveLayerOpacity":
-            this.registeredFunctionHandlers[
-              "openPopupToSetActiveLayerOpacity"
-            ]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "openPopupToSetActiveLayerOpacity",
-                    args: {},
-                  },
-                },
+            await this.toolCall(
+              "openPopupToSetActiveLayerOpacity",
+              {},
+              this.registeredFunctionHandlers[
+                "openPopupToSetActiveLayerOpacity"
               ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "openPopupToSetActiveLayerOpacity",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
+            );
+            return true;
+          case "zoomIn":
+            await this.toolCall(
+              "zoomIn",
+              {},
+              this.registeredFunctionHandlers["zoomIn"],
+            );
+            return true;
+          case "zoomOut":
+            await this.toolCall(
+              "zoomOut",
+              {},
+              this.registeredFunctionHandlers["zoomOut"],
+            );
+            return true;
+          case "setZoom":
+            await this.toolCall("setZoom", functionCall.args, () => {
+              if (typeof functionCall.args?.scale !== "number") {
+                throw new Error("scale parameter is required.");
+              }
+              this.registeredFunctionHandlers["setZoom"](
+                functionCall.args.scale,
+              );
             });
             return true;
           case "selectMoveTool":
-            this.registeredFunctionHandlers["selectMoveTool"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "selectMoveTool",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "selectMoveTool",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "selectMoveTool",
+              {},
+              this.registeredFunctionHandlers["selectMoveTool"],
+            );
             return true;
           case "selectPaintTool":
-            this.registeredFunctionHandlers["selectPaintTool"]();
-            this.appendMessage({
-              role: "functionCall",
-              parts: [
-                {
-                  functionCall: {
-                    name: "selectPaintTool",
-                    args: {},
-                  },
-                },
-              ],
-            });
-            this.appendMessage({
-              role: "functionResponse",
-              parts: [
-                {
-                  functionResponse: {
-                    name: "selectPaintTool",
-                    response: {
-                      success: true,
-                    },
-                  },
-                },
-              ],
-            });
+            await this.toolCall(
+              "selectPaintTool",
+              {},
+              this.registeredFunctionHandlers["selectPaintTool"],
+            );
             return true;
           default:
             this.appendMessage({
-              role: "error",
+              role: "functionCall",
               parts: [
                 {
-                  text: `[Error: Unknown function call: ${functionCall.name}]`,
+                  functionCall: {
+                    name: functionCall.name,
+                    args: functionCall.args || {},
+                  },
+                },
+              ],
+            });
+            this.appendMessage({
+              role: "functionResponse",
+              parts: [
+                {
+                  functionResponse: {
+                    name: functionCall.name,
+                    response: {
+                      success: false,
+                      error: `Unknown function: ${functionCall.name}`,
+                    },
+                  },
                 },
               ],
             });
@@ -1215,6 +936,58 @@ export class ChatPanel extends EventEmitter {
       }
     }
     return false;
+  }
+
+  private async toolCall(
+    functionName: string,
+    functionArgs: any,
+    functionCall: () => Promise<any> | any,
+  ): Promise<void> {
+    this.appendMessage({
+      role: "functionCall",
+      parts: [
+        {
+          functionCall: {
+            name: functionName,
+            args: functionArgs,
+          },
+        },
+      ],
+    });
+    let response: any;
+    try {
+      response = await functionCall();
+    } catch (error) {
+      this.appendMessage({
+        role: "functionResponse",
+        parts: [
+          {
+            functionResponse: {
+              name: functionName,
+              response: {
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            },
+          },
+        ],
+      });
+      return;
+    }
+    this.appendMessage({
+      role: "functionResponse",
+      parts: [
+        {
+          functionResponse: {
+            name: functionName,
+            response: {
+              success: true,
+              ...response,
+            },
+          },
+        },
+      ],
+    });
   }
 
   private extractAssistantText(payload: any): string | undefined {

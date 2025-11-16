@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { Project } from "./project";
+import { normalizeProjectMetadata } from "./project_normalizer";
 
 export async function saveToZip(project: Project): Promise<Blob> {
   const zip = new JSZip();
@@ -31,7 +32,7 @@ export async function loadFromZip(zipBlob: Blob): Promise<Project> {
     throw new Error("Invalid project file: missing project.json");
   }
   const projectJson = await projectJsonFile.async("text");
-  const metadata = JSON.parse(projectJson);
+  const metadata = normalizeProjectMetadata(JSON.parse(projectJson));
 
   // Load layer images
   const layersToCanvas = new Map<string, HTMLCanvasElement>();

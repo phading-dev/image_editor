@@ -14,8 +14,9 @@ import { SetLayerOpacityCommand } from "./commands/set_layer_opacity_command";
 import { ShowLayersCommand } from "./commands/show_layers_command";
 import { UnlockLayersCommand } from "./commands/unlock_layers_command";
 import { LayersPanel } from "./layers_panel";
-import { SliderPopup } from "./popup/slider_popup";
+import { SetLayerOpacitySliderPopup } from "./popup/set_layer_opacity_slider_popup";
 import { Project } from "./project";
+import { Layer } from "./project_metadata";
 import { saveToZip } from "./project_serializer";
 import { E } from "@selfage/element/factory";
 
@@ -91,14 +92,19 @@ class ResizeHandle {
 }
 
 export class Editor {
-  public static create(loadProject: () => void, project: Project): Editor {
+  public static create(
+    newProject: () => void,
+    loadProject: () => void,
+    project: Project,
+  ): Editor {
     return new Editor(
       ChatPanel.create,
       MainCanvasPanel.create,
       LayersPanel.create,
       CommandHistoryManager.create,
-      SliderPopup.create,
+      SetLayerOpacitySliderPopup.create,
       project,
+      newProject,
       loadProject,
     );
   }
@@ -116,8 +122,9 @@ export class Editor {
     private readonly createMainCanvasPanel: typeof MainCanvasPanel.create,
     private readonly createLayersPanel: typeof LayersPanel.create,
     private readonly createCommandHistoryManager: typeof CommandHistoryManager.create,
-    private readonly createSliderPopup: typeof SliderPopup.create,
+    private readonly createSetLayerOpacitySliderPopup: typeof SetLayerOpacitySliderPopup.create,
     private readonly project: Project,
+    private readonly newProject: () => void,
     private readonly loadProject: () => void,
   ) {
     this.chatPanel = this.createChatPanel();
@@ -169,6 +176,45 @@ export class Editor {
       })
       .on("layerSelectionChanged", () => {
         this.mainCanvasPanel.rerender();
+      })
+      .on("toggleLayerVisibility", (layerId: string) => {
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === layerId,
+        );
+        if (layer.visible) {
+          this.commandHistoryManager.pushCommand(
+            new HideLayersCommand(
+              [layer],
+              this.layersPanel,
+              this.mainCanvasPanel,
+            ),
+          );
+        } else {
+          this.commandHistoryManager.pushCommand(
+            new ShowLayersCommand(
+              [layer],
+              this.layersPanel,
+              this.mainCanvasPanel,
+            ),
+          );
+        }
+      })
+      .on("toggleLayerLock", (layerId: string) => {
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === layerId,
+        );
+        if (layer.locked) {
+          this.commandHistoryManager.pushCommand(
+            new UnlockLayersCommand([layer], this.layersPanel),
+          );
+        } else {
+          this.commandHistoryManager.pushCommand(
+            new LockLayersCommand([layer], this.layersPanel),
+          );
+        }
+      })
+      .on("updateLayerOpacity", (layerId: string) => {
+        this.popupSetLayerOpacity(layerId);
       });
     this.mainCanvasPanel
       .setGetActiveLayerId(() => this.layersPanel.activeLayerId)
@@ -213,6 +259,9 @@ export class Editor {
       })
       .setLoadProjectHandler(() => {
         this.loadProject();
+      })
+      .setNewProjectHandler(() => {
+        this.newProject();
       })
       .setDescribeProjectHandler(() => {
         return JSON.stringify(this.project.metadata);
@@ -265,17 +314,14 @@ export class Editor {
         );
       })
       .setDeleteActiveLayerHandler(() => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to delete.");
+        }
         const layer = this.project.metadata.layers.find(
           (layer) => layer.id === this.layersPanel.activeLayerId,
         );
         if (layer.locked) {
-          this.chatPanel.appendMessage({
-            role: "warning",
-            parts: [
-              { text: "The active layer is locked and cannot be deleted." },
-            ],
-          });
-          return;
+          throw new Error("Cannot delete a locked layer.");
         }
         this.commandHistoryManager.pushCommand(
           new DeleteLayerCommand(
@@ -288,62 +334,54 @@ export class Editor {
       })
       .setLockSelectedLayersHandler(() => {
         const selectedLayers = this.layersPanel.selectedLayerIds;
+        if (selectedLayers.size === 0) {
+          throw new Error("No layers selected to lock.");
+        }
         const layers = this.project.metadata.layers
           .filter((layer) => this.layersPanel.selectedLayerIds.has(layer.id))
           .filter((layer) => !layer.locked);
         if (layers.length === 0) {
-          this.chatPanel.appendMessage({
-            role: "warning",
-            parts: [{ text: "All selected layers are already locked." }],
-          });
-          return;
+          throw new Error("All selected layers are already locked.");
         }
+        let warning: string;
         if (layers.length < selectedLayers.size) {
-          this.chatPanel.appendMessage({
-            role: "warning",
-            parts: [
-              {
-                text: "Some selected layers are already locked and were skipped.",
-              },
-            ],
-          });
+          warning = "Some selected layers are already locked and were skipped.";
         }
         this.commandHistoryManager.pushCommand(
           new LockLayersCommand(layers, this.layersPanel),
         );
+        return {
+          warning: warning,
+        };
       })
       .setUnlockSelectedLayersHandler(() => {
         const selectedLayers = this.layersPanel.selectedLayerIds;
+        if (selectedLayers.size === 0) {
+          throw new Error("No layers selected to unlock.");
+        }
         const layers = this.project.metadata.layers
           .filter((layer) => selectedLayers.has(layer.id))
           .filter((layer) => layer.locked);
         if (layers.length === 0) {
-          this.chatPanel.appendMessage({
-            role: "warning",
-            parts: [
-              {
-                text: "All selected layers are already unlocked.",
-              },
-            ],
-          });
-          return;
+          throw new Error("All selected layers are already unlocked.");
         }
+        let warning: string;
         if (layers.length < selectedLayers.size) {
-          this.chatPanel.appendMessage({
-            role: "warning",
-            parts: [
-              {
-                text: "Some selected layers are already unlocked and were skipped.",
-              },
-            ],
-          });
+          warning =
+            "Some selected layers are already unlocked and were skipped.";
         }
         this.commandHistoryManager.pushCommand(
           new UnlockLayersCommand(layers, this.layersPanel),
         );
+        return {
+          warning: warning,
+        };
       })
       .setShowSelectedLayersHandler(() => {
         const selectedLayers = this.layersPanel.selectedLayerIds;
+        if (selectedLayers.size === 0) {
+          throw new Error("No layers selected to show.");
+        }
         const layers = this.project.metadata.layers
           .filter((layer) => selectedLayers.has(layer.id))
           .filter((layer) => !layer.visible);
@@ -353,6 +391,9 @@ export class Editor {
       })
       .setHideSelectedLayersHandler(() => {
         const selectedLayers = this.layersPanel.selectedLayerIds;
+        if (selectedLayers.size === 0) {
+          throw new Error("No layers selected to hide.");
+        }
         const layers = this.project.metadata.layers
           .filter((layer) => selectedLayers.has(layer.id))
           .filter((layer) => layer.visible);
@@ -361,6 +402,9 @@ export class Editor {
         );
       })
       .setRenameActiveLayerHandler((newName: string) => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to rename.");
+        }
         const layer = this.project.metadata.layers.find(
           (layer) => layer.id === this.layersPanel.activeLayerId,
         );
@@ -369,6 +413,9 @@ export class Editor {
         );
       })
       .setSetActiveLayerOpacityHandler((newOpacity: number) => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to set opacity.");
+        }
         const layer = this.project.metadata.layers.find(
           (layer) => layer.id === this.layersPanel.activeLayerId,
         );
@@ -383,33 +430,19 @@ export class Editor {
         );
       })
       .setOpenPopupToSetActiveLayerOpacityHandler(() => {
-        const layer = this.project.metadata.layers.find(
-          (layer) => layer.id === this.layersPanel.activeLayerId,
-        );
-        let sliderPopup = this.createSliderPopup(
-          "Set Layer Opacity",
-          layer.opacity,
-          0,
-          100,
-          "%",
-        )
-          .on("change", (newOpacity: number) => {
-            layer.opacity = newOpacity;
-            this.layersPanel.rerenderLayerRow(layer.id);
-            this.mainCanvasPanel.rerender();
-          })
-          .on("commit", (oldOpacity: number, newOpacity: number) => {
-            this.commandHistoryManager.pushCommand(
-              new SetLayerOpacityCommand(
-                layer,
-                oldOpacity,
-                newOpacity,
-                this.layersPanel,
-                this.mainCanvasPanel,
-              ),
-            );
-          });
-        this.element.append(sliderPopup.element);
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to set opacity.");
+        }
+        this.popupSetLayerOpacity(this.layersPanel.activeLayerId);
+      })
+      .setZoomInHandler(() => {
+        this.mainCanvasPanel.zoomIn();
+      })
+      .setZoomOutHandler(() => {
+        this.mainCanvasPanel.zoomOut();
+      })
+      .setSetZoomHandler((scale: number) => {
+        this.mainCanvasPanel.setZoom(scale);
       })
       .setSelectMoveToolHandler(() => {
         this.mainCanvasPanel.selectMoveTool();
@@ -419,6 +452,28 @@ export class Editor {
       });
     this.mainCanvasPanel.rerender();
     this.chatPanel.initialGreet();
+  }
+
+  private popupSetLayerOpacity(layerId: string): void {
+    const layer = this.project.metadata.layers.find(
+      (layer) => layer.id === layerId,
+    );
+    const popup = this.createSetLayerOpacitySliderPopup(
+      layer,
+      this.layersPanel,
+      this.mainCanvasPanel,
+    ).on("commit", (layer: Layer, oldOpacity: number, newOpacity: number) => {
+      this.commandHistoryManager.pushCommand(
+        new SetLayerOpacityCommand(
+          layer,
+          oldOpacity,
+          newOpacity,
+          this.layersPanel,
+          this.mainCanvasPanel,
+        ),
+      );
+    });
+    this.element.append(popup.element);
   }
 
   public remove(): void {

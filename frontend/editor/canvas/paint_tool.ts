@@ -31,6 +31,10 @@ export class PaintTool {
       return;
     }
     this.layer = this.getActiveLayer();
+    if (!this.layer) {
+      this.warning("No active layer to paint on.");
+      return;
+    }
     if (this.layer.locked) {
       this.warning("Cannot paint on a locked layer.");
       return;

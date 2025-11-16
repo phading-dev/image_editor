@@ -1,5 +1,6 @@
 import EventEmitter = require("events");
 import { COLOR_THEME } from "../../color_theme";
+import { FONT_S } from "../../sizes";
 import { Project } from "../project";
 import { Layer } from "../project_metadata";
 import { MoveTool } from "./move_tool";
@@ -29,11 +30,19 @@ export class MainCanvasPanel extends EventEmitter {
     return new MainCanvasPanel(project);
   }
 
+  private static readonly ZOOM_STEPS = [
+    0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0,
+  ];
+
   public readonly element: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly canvasContainer: HTMLDivElement;
+  private readonly canvasScrollContainer: HTMLDivElement;
   private readonly activeLayerOutline: HTMLDivElement;
   private readonly context: CanvasRenderingContext2D;
+  private readonly zoomLevelDisplay: HTMLSpanElement;
+  private readonly zoomOutButton: HTMLButtonElement;
+  private readonly zoomInButton: HTMLButtonElement;
   private scaleFactor = 1.0;
   private getActiveLayerId: () => string;
   private getSelectedLayerIds: () => Set<string>;
@@ -45,7 +54,11 @@ export class MainCanvasPanel extends EventEmitter {
     super();
     let canvasRef = new Ref<HTMLCanvasElement>();
     let canvasContainerRef = new Ref<HTMLDivElement>();
+    let canvasScrollContainerRef = new Ref<HTMLDivElement>();
     let activeLayerOutlineRef = new Ref<HTMLDivElement>();
+    let zoomLevelDisplayRef = new Ref<HTMLSpanElement>();
+    let zoomOutButtonRef = new Ref<HTMLButtonElement>();
+    let zoomInButtonRef = new Ref<HTMLButtonElement>();
 
     this.element = E.div(
       {
@@ -53,8 +66,8 @@ export class MainCanvasPanel extends EventEmitter {
           "flex:1 0 0",
           "min-width:0",
           "height:100%",
-          "overflow:auto",
           "display:flex",
+          "flex-direction:column",
           `background:${COLOR_THEME.neutral4}`,
           "user-select: none",
           "touch-action: none",
@@ -62,43 +75,154 @@ export class MainCanvasPanel extends EventEmitter {
       },
       E.div(
         {
-          ref: canvasContainerRef,
+          ref: canvasScrollContainerRef,
           style: [
-            "position: relative",
-            "margin: auto",
-            "width: " + this.project.metadata.width + "px",
-            "height: " + this.project.metadata.height + "px",
+            "flex:1 0 0",
+            "min-height:0",
+            "width:100%",
+            "overflow:auto",
+            "display:flex",
+            "padding:2rem",
+            "box-sizing:border-box",
           ].join("; "),
         },
-        E.canvas({
-          ref: canvasRef,
-          style: "width: 100%; height: 100%;",
-        }),
-        E.div({
-          ref: activeLayerOutlineRef,
+        E.div(
+          {
+            ref: canvasContainerRef,
+            style: [
+              "position: relative",
+              "margin: auto",
+              "flex: 0 0 auto",
+              "overflow: hidden",
+              "width: " + this.project.metadata.width + "px",
+              "height: " + this.project.metadata.height + "px",
+            ].join("; "),
+          },
+          E.canvas({
+            ref: canvasRef,
+            style: "width: 100%; height: 100%;",
+          }),
+          E.div({
+            ref: activeLayerOutlineRef,
+            style: [
+              "position: absolute",
+              "pointer-events: none",
+              `border: 2px dashed ${COLOR_THEME.neutral3}`,
+              "display: none",
+            ].join("; "),
+          }),
+        ),
+      ),
+      E.div(
+        {
           style: [
-            "position: absolute",
-            "pointer-events: none",
-            `border: 2px dashed ${COLOR_THEME.neutral3}`,
-            "display: none",
+            "padding: 0.5rem 1rem",
+            "display: flex",
+            "align-items: center",
+            "justify-content: center",
+            "gap: 0.5rem",
+            `border-top: 1px solid ${COLOR_THEME.neutral3}`,
           ].join("; "),
-        }),
+        },
+        E.button(
+          {
+            ref: zoomOutButtonRef,
+            style: [
+              `background:${COLOR_THEME.neutral3}`,
+              `color:${COLOR_THEME.neutral0}`,
+              "border:none",
+              "border-radius:0.25rem",
+              "cursor:pointer",
+              "width:2rem",
+              "height:2rem",
+              "display:flex",
+              "align-items:center",
+              "justify-content:center",
+            ].join("; "),
+          },
+          E.svg(
+            {
+              viewBox: "0 0 24 24",
+              style: [
+                "width:1rem",
+                "height:1rem",
+                `fill:${COLOR_THEME.neutral0}`,
+              ].join(";"),
+            },
+            E.path({
+              d: "M19 13H5v-2h14v2z",
+            }),
+          ),
+        ),
+        E.span(
+          {
+            ref: zoomLevelDisplayRef,
+            style: [
+              `font-size:${FONT_S}rem`,
+              `color:${COLOR_THEME.neutral0}`,
+              "min-width:3rem",
+              "text-align:center",
+            ].join("; "),
+          },
+          E.text("100%"),
+        ),
+        E.button(
+          {
+            ref: zoomInButtonRef,
+            style: [
+              `background:${COLOR_THEME.neutral3}`,
+              `color:${COLOR_THEME.neutral0}`,
+              "border:none",
+              "border-radius:0.25rem",
+              "cursor:pointer",
+              "width:2rem",
+              "height:2rem",
+              "display:flex",
+              "align-items:center",
+              "justify-content:center",
+            ].join("; "),
+          },
+          E.svg(
+            {
+              viewBox: "0 0 24 24",
+              style: [
+                "width:1rem",
+                "height:1rem",
+                `fill:${COLOR_THEME.neutral0}`,
+              ].join(";"),
+            },
+            E.path({
+              d: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",
+            }),
+          ),
+        ),
       ),
     );
     if (
       !canvasRef.val ||
       !canvasContainerRef.val ||
-      !activeLayerOutlineRef.val
+      !canvasScrollContainerRef.val ||
+      !activeLayerOutlineRef.val ||
+      !zoomLevelDisplayRef.val ||
+      !zoomOutButtonRef.val ||
+      !zoomInButtonRef.val
     ) {
       throw new Error("MainCanvasPanel failed to initialize DOM refs.");
     }
     this.canvas = canvasRef.val;
     this.canvasContainer = canvasContainerRef.val;
+    this.canvasScrollContainer = canvasScrollContainerRef.val;
     this.activeLayerOutline = activeLayerOutlineRef.val;
+    this.zoomLevelDisplay = zoomLevelDisplayRef.val;
+    this.zoomOutButton = zoomOutButtonRef.val;
+    this.zoomInButton = zoomInButtonRef.val;
 
     this.canvas.width = this.project.metadata.width;
     this.canvas.height = this.project.metadata.height;
     this.context = this.canvas.getContext("2d");
+
+    this.zoomOutButton.addEventListener("click", () => this.zoomOut());
+    this.zoomInButton.addEventListener("click", () => this.zoomIn());
   }
 
   public rerender(): void {
@@ -172,9 +296,36 @@ export class MainCanvasPanel extends EventEmitter {
     this.activeLayerOutline.style.display = "block";
   }
 
-  public scale(factor: number): void {
-    this.scaleFactor = factor;
+  private updateZoomDisplay(): void {
+    this.zoomLevelDisplay.textContent = `${Math.round(this.scaleFactor * 100)}%`;
+  }
+
+  public zoomIn(): void {
+    const currentIndex = MainCanvasPanel.ZOOM_STEPS.findIndex(
+      (step) => step > this.scaleFactor,
+    );
+    if (currentIndex !== -1) {
+      this.scaleFactor = MainCanvasPanel.ZOOM_STEPS[currentIndex];
+      this.rerender();
+      this.updateZoomDisplay();
+    }
+  }
+
+  public zoomOut(): void {
+    const currentIndex = MainCanvasPanel.ZOOM_STEPS.findIndex(
+      (step) => step >= this.scaleFactor,
+    );
+    if (currentIndex > 0) {
+      this.scaleFactor = MainCanvasPanel.ZOOM_STEPS[currentIndex - 1];
+      this.rerender();
+      this.updateZoomDisplay();
+    }
+  }
+
+  public setZoom(scale: number): void {
+    this.scaleFactor = scale / 100;
     this.rerender();
+    this.updateZoomDisplay();
   }
 
   public setGetActiveLayerId(getActiveLayerId: () => string): this {
@@ -183,12 +334,18 @@ export class MainCanvasPanel extends EventEmitter {
   }
 
   private getActiveLayer(): Layer {
+    if (!this.getActiveLayerId) {
+      return undefined;
+    }
     return this.project.metadata.layers.find(
       (layer) => layer.id === this.getActiveLayerId(),
     );
   }
 
   private getActiveLayerContext(): CanvasRenderingContext2D {
+    if (!this.getActiveLayerId) {
+      return undefined;
+    }
     return this.project.layersToCanvas
       .get(this.getActiveLayerId())
       .getContext("2d");
@@ -229,7 +386,7 @@ export class MainCanvasPanel extends EventEmitter {
     this.toolSwitch.show(
       () => {
         this.moveTool = new MoveTool(
-          this.element,
+          this.canvasScrollContainer,
           this.canvas,
           () => this.getSelectedLayers(),
           () => this.rerender(),

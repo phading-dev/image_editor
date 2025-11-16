@@ -1,5 +1,6 @@
 import { Editor } from "./editor";
 import { Project } from "./project";
+import { normalizeProjectMetadata } from "./project_normalizer";
 import { loadFromZip } from "./project_serializer";
 
 export class EditorFactory {
@@ -13,25 +14,20 @@ export class EditorFactory {
     private createEditor: typeof Editor.create,
     private documentBody: HTMLElement,
   ) {
+    this.newProject();
+  }
+
+  private newProject(): void {
     let project: Project = {
-      metadata: {
-        name: "New Project",
-        width: 800,
-        height: 600,
-        settings: {
-          foregroundColor: "#FFFFFF",
-          backgroundColor: "#000000",
-          paintToolSettings: {
-            brushColor: "#000000",
-            brushSize: 1,
-            strokeWidth: 1,
-          },
-        },
-        layers: [],
-      },
+      metadata: normalizeProjectMetadata({}),
       layersToCanvas: new Map<string, HTMLCanvasElement>(),
     };
-    this.editor = this.createEditor(() => this.loadProject(), project);
+    this.editor?.remove();
+    this.editor = this.createEditor(
+      () => this.newProject(),
+      () => this.loadProject(),
+      project,
+    );
     this.documentBody.append(this.editor.element);
   }
 
@@ -57,7 +53,11 @@ export class EditorFactory {
       throw error;
     }
     this.editor.remove();
-    this.editor = this.createEditor(() => this.loadProject(), loadedProject);
+    this.editor = this.createEditor(
+      () => this.newProject(),
+      () => this.loadProject(),
+      loadedProject,
+    );
     this.documentBody.append(this.editor.element);
   }
 }

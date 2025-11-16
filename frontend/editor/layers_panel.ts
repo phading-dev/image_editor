@@ -17,6 +17,9 @@ export interface LayerRow {
   on(event: "dragover", listener: (event: DragEvent) => void): this;
   on(event: "drop", listener: (event: DragEvent) => void): this;
   on(event: "dragend", listener: (event: DragEvent) => void): this;
+  on(event: "toggleVisibility", listener: (layerId: string) => void): this;
+  on(event: "toggleLock", listener: (layerId: string) => void): this;
+  on(event: "updateOpacity", listener: (layerId: string) => void): this;
 }
 
 export class LayerRow extends EventEmitter {
@@ -138,6 +141,15 @@ export class LayerRow extends EventEmitter {
     this.element.addEventListener("dragend", (event) => {
       this.emit("dragend", event);
     });
+    this.visibleSpan.addEventListener("click", () => {
+      this.emit("toggleVisibility", this.id);
+    });
+    this.opacitySpan.addEventListener("click", () => {
+      this.emit("updateOpacity", this.id);
+    });
+    this.lockedSpan.addEventListener("click", () => {
+      this.emit("toggleLock", this.id);
+    });
   }
 
   public rerender(): void {
@@ -166,6 +178,9 @@ export interface LayersPanel {
     listener: (oldIndex: number, newIndex: number) => void,
   ): this;
   on(event: "layerSelectionChanged", listener: () => void): this;
+  on(event: "toggleLayerVisibility", listener: (layerId: string) => void): this;
+  on(event: "toggleLayerLock", listener: (layerId: string) => void): this;
+  on(event: "updateLayerOpacity", listener: (layerId: string) => void): this;
 }
 
 export class LayersPanel extends EventEmitter {
@@ -309,25 +324,35 @@ export class LayersPanel extends EventEmitter {
   }
 
   private setupRowClickHandlers(row: LayerRow): void {
-    row.on("click", (event) => {
-      if (!event.shiftKey) {
-        this.selectExclusiveLayer(row);
-      } else {
-        let isSelected = this.selectedLayerIds.has(row.id);
-        if (isSelected) {
-          if (this.selectedLayerIds.size === 1) {
-            // Prevent deselecting the last selected layer
-            return;
-          }
-          row.setSelected(false);
-          this.selectedLayerIds.delete(row.id);
+    row
+      .on("click", (event) => {
+        if (!event.shiftKey) {
+          this.selectExclusiveLayer(row);
         } else {
-          row.setSelected(true);
-          this.selectedLayerIds.add(row.id);
+          let isSelected = this.selectedLayerIds.has(row.id);
+          if (isSelected) {
+            if (this.selectedLayerIds.size === 1) {
+              // Prevent deselecting the last selected layer
+              return;
+            }
+            row.setSelected(false);
+            this.selectedLayerIds.delete(row.id);
+          } else {
+            row.setSelected(true);
+            this.selectedLayerIds.add(row.id);
+          }
         }
-      }
-      this.emit("layerSelectionChanged");
-    });
+        this.emit("layerSelectionChanged");
+      })
+      .on("toggleVisibility", (layerId) => {
+        this.emit("toggleLayerVisibility", layerId);
+      })
+      .on("updateOpacity", (layerId) => {
+        this.emit("updateLayerOpacity", layerId);
+      })
+      .on("toggleLock", (layerId) => {
+        this.emit("toggleLayerLock", layerId);
+      });
   }
 
   private selectExclusiveLayer(row: LayerRow): void {

@@ -44,12 +44,17 @@ export class MoveTool {
     if (event.button !== 0) {
       return;
     }
-    this.layers = this.getSelectedLayers().filter((layer) => !layer.locked);
-    if (this.layers.length === 0) {
-      this.warning("No movable layers selected.");
+    const selectedLayers = this.getSelectedLayers();
+    if (selectedLayers.length === 0) {
+      this.warning("No layers selected to move.");
       return;
     }
-    if (this.layers.length < this.getSelectedLayers().length) {
+    this.layers = selectedLayers.filter((layer) => !layer.locked);
+    if (this.layers.length === 0) {
+      this.warning("All selected layers are locked.");
+      return;
+    }
+    if (this.layers.length < selectedLayers.length) {
       this.warning("Some selected layers are locked and cannot be moved.");
       // Continue with the unlocked layers
     }
