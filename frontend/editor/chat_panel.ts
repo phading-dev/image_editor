@@ -252,19 +252,19 @@ export class ChatPanel extends EventEmitter {
       event.preventDefault();
       this.registeredFunctionHandlers["loadProject"]();
     }
-    // Handle Ctrl+"+" (zoom in)
+    // Handle Ctrl+"+" (zoom in) or with shift
     else if (
       (event.ctrlKey || event.metaKey) &&
-      event.key === "+" &&
+      (event.key === "+" || event.key === "=") && // "=" for non-shifted "+"
       !event.altKey
     ) {
       event.preventDefault();
       this.registeredFunctionHandlers["zoomIn"]();
     }
-    // Handle Ctrl+"-" (zoom out)
+    // Handle Ctrl+"-" (zoom out) or with shift
     else if (
       (event.ctrlKey || event.metaKey) &&
-      event.key === "-" &&
+      (event.key === "-" || event.key === "_") && // "_" for shifted "-"
       !event.altKey
     ) {
       event.preventDefault();
@@ -514,7 +514,7 @@ export class ChatPanel extends EventEmitter {
                   "Your role is to help users edit images by interpreting their requests and calling the appropriate functions.",
                   "The application has layers (like Photoshop), and users can work on an active layer and manage layers.",
                   "When users ask to perform actions, use the available functions to execute them.",
-                  "Shortcuts are available for undo (Ctrl+Z), redo (Ctrl+Y or Ctrl+Shift+Z), and save (Ctrl+S).",
+                  "Shortcuts are available for: undo (Ctrl+Z), redo (Ctrl+Y or Ctrl+Shift+Z), save (Ctrl+S), open (Ctrl+O), zoom in (Ctrl+Plus), and zoom out (Ctrl+Minus).",
                   "Popup can be closed by clicking or typing outside or pressing Escape.",
                   "Multi-selecting layers can be done by holding down Shift while clicking on layers.",
                   "Be concise and friendly in your responses.",
