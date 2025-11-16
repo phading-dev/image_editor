@@ -19,6 +19,7 @@ export class PaintTool {
     ) => void,
     private readonly warning: (message: string) => void,
   ) {
+    this.canvas.style.cursor = "crosshair";
     this.canvas.addEventListener("pointerdown", this.handlePointerDown);
     this.canvas.addEventListener("pointermove", this.handlePointerMove);
     this.canvas.addEventListener("pointerup", this.handlePointerUpOrCancel);
@@ -127,6 +128,7 @@ export class PaintTool {
   }
 
   public remove(): void {
+    this.canvas.style.cursor = "";
     this.canvas.removeEventListener("pointerdown", this.handlePointerDown);
     this.canvas.removeEventListener("pointermove", this.handlePointerMove);
     this.canvas.removeEventListener("pointerup", this.handlePointerUpOrCancel);

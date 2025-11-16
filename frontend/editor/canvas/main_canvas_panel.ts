@@ -5,6 +5,7 @@ import { Project } from "../project";
 import { Layer } from "../project_metadata";
 import { MoveTool } from "./move_tool";
 import { PaintTool } from "./paint_tool";
+import { PanTool } from "./pan_tool";
 import { E } from "@selfage/element/factory";
 import { Ref } from "@selfage/ref";
 import { TabsSwitcher } from "@selfage/tabs/switcher";
@@ -27,7 +28,7 @@ export interface MainCanvasPanel {
 
 export class MainCanvasPanel extends EventEmitter {
   public static create(project: Project): MainCanvasPanel {
-    return new MainCanvasPanel(project);
+    return new MainCanvasPanel(document, project);
   }
 
   private static readonly ZOOM_STEPS = [
@@ -48,9 +49,14 @@ export class MainCanvasPanel extends EventEmitter {
   private getSelectedLayerIds: () => Set<string>;
   private paintTool: PaintTool;
   private moveTool: MoveTool;
+  private panTool: PanTool;
   private toolSwitch = new TabsSwitcher();
+  private selectPreviousTool: () => void;
 
-  public constructor(private project: Project) {
+  public constructor(
+    private document: Document,
+    private project: Project,
+  ) {
     super();
     let canvasRef = new Ref<HTMLCanvasElement>();
     let canvasContainerRef = new Ref<HTMLDivElement>();
@@ -70,7 +76,6 @@ export class MainCanvasPanel extends EventEmitter {
           "flex-direction:column",
           `background:${COLOR_THEME.neutral4}`,
           "user-select: none",
-          "touch-action: none",
         ].join("; "),
       },
       E.div(
@@ -84,6 +89,7 @@ export class MainCanvasPanel extends EventEmitter {
             "display:flex",
             "padding:2rem",
             "box-sizing:border-box",
+            "touch-action:none",
           ].join("; "),
         },
         E.div(
@@ -223,7 +229,25 @@ export class MainCanvasPanel extends EventEmitter {
 
     this.zoomOutButton.addEventListener("click", () => this.zoomOut());
     this.zoomInButton.addEventListener("click", () => this.zoomIn());
+    this.document.addEventListener("keydown", this.handleKeyDown);
+    this.document.addEventListener("keyup", this.handleKeyUp);
+    
+    this.selectMoveTool();
   }
+
+  private handleKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === "Alt" && !e.repeat) {
+      this.selectPanTool();
+      e.preventDefault();
+    }
+  };
+
+  private handleKeyUp = (e: KeyboardEvent): void => {
+    if (e.key === "Alt") {
+      this.selectPreviousTool();
+      e.preventDefault();
+    }
+  };
 
   public rerender(): void {
     this.canvasContainer.style.width = `${this.project.metadata.width * this.scaleFactor}px`;
@@ -375,6 +399,7 @@ export class MainCanvasPanel extends EventEmitter {
             this.emit("paint", context, oldImageData, newImageData),
           (message: string) => this.emit("warning", message),
         );
+        this.selectPreviousTool = () => this.selectPaintTool();
       },
       () => {
         this.paintTool.remove();
@@ -393,9 +418,21 @@ export class MainCanvasPanel extends EventEmitter {
           (layers, deltaX, deltaY) => this.emit("move", layers, deltaX, deltaY),
           (message: string) => this.emit("warning", message),
         );
+        this.selectPreviousTool = () => this.selectMoveTool();
       },
       () => {
         this.moveTool.remove();
+      },
+    );
+  }
+
+  public selectPanTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.panTool = new PanTool(this.canvasScrollContainer);
+      },
+      () => {
+        this.panTool.remove();
       },
     );
   }
