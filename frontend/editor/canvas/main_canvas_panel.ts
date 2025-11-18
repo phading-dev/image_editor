@@ -231,7 +231,7 @@ export class MainCanvasPanel extends EventEmitter {
     this.zoomInButton.addEventListener("click", () => this.zoomIn());
     this.document.addEventListener("keydown", this.handleKeyDown);
     this.document.addEventListener("keyup", this.handleKeyUp);
-    
+
     this.selectMoveTool();
   }
 
@@ -392,6 +392,7 @@ export class MainCanvasPanel extends EventEmitter {
       () => {
         this.paintTool = new PaintTool(
           this.canvas,
+          this.project.metadata,
           () => this.getActiveLayer(),
           () => this.getActiveLayerContext(),
           () => this.rerender(),

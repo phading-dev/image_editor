@@ -83,8 +83,6 @@ export let LAYER: MessageDescriptor<Layer> = {
 
 export interface PaintToolSettings {
   brushSize?: number,
-  brushColor?: string,
-  strokeWidth?: number,
 }
 
 export let PAINT_TOOL_SETTINGS: MessageDescriptor<PaintToolSettings> = {
@@ -92,14 +90,6 @@ export let PAINT_TOOL_SETTINGS: MessageDescriptor<PaintToolSettings> = {
   fields: [{
     name: 'brushSize',
     index: 1,
-    primitiveType: PrimitiveType.NUMBER,
-  }, {
-    name: 'brushColor',
-    index: 2,
-    primitiveType: PrimitiveType.STRING,
-  }, {
-    name: 'strokeWidth',
-    index: 3,
     primitiveType: PrimitiveType.NUMBER,
   }],
 };

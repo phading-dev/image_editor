@@ -14,9 +14,9 @@ import { SetLayerOpacityCommand } from "./commands/set_layer_opacity_command";
 import { ShowLayersCommand } from "./commands/show_layers_command";
 import { UnlockLayersCommand } from "./commands/unlock_layers_command";
 import { LayersPanel } from "./layers_panel";
-import { SetLayerOpacitySliderPopup } from "./popup/set_layer_opacity_slider_popup";
+import { ColorPickerPopup } from "./popup/color_picker_popup";
+import { SliderPopup } from "./popup/slider_popup";
 import { Project } from "./project";
-import { Layer } from "./project_metadata";
 import { saveToZip } from "./project_serializer";
 import { E } from "@selfage/element/factory";
 
@@ -96,16 +96,19 @@ export class Editor {
     newProject: () => void,
     loadProject: () => void,
     project: Project,
+    projectMetadataContent: string,
   ): Editor {
     return new Editor(
       ChatPanel.create,
       MainCanvasPanel.create,
       LayersPanel.create,
       CommandHistoryManager.create,
-      SetLayerOpacitySliderPopup.create,
-      project,
+      SliderPopup.create,
+      ColorPickerPopup.create,
       newProject,
       loadProject,
+      project,
+      projectMetadataContent,
     );
   }
 
@@ -116,18 +119,22 @@ export class Editor {
   public readonly commandHistoryManager: CommandHistoryManager;
   private readonly chatResizeHandle: ResizeHandle;
   private readonly layersResizeHandle: ResizeHandle;
+  private opacitySliderPopup?: SliderPopup;
+  private colorPickerPopup?: ColorPickerPopup;
 
   public constructor(
     private readonly createChatPanel: typeof ChatPanel.create,
     private readonly createMainCanvasPanel: typeof MainCanvasPanel.create,
     private readonly createLayersPanel: typeof LayersPanel.create,
     private readonly createCommandHistoryManager: typeof CommandHistoryManager.create,
-    private readonly createSetLayerOpacitySliderPopup: typeof SetLayerOpacitySliderPopup.create,
-    private readonly project: Project,
+    private readonly createSliderPopup: typeof SliderPopup.create,
+    private readonly createColorPickerPopup: typeof ColorPickerPopup.create,
     private readonly newProject: () => void,
     private readonly loadProject: () => void,
+    private readonly project: Project,
+    private readonly projectMetadataContent: string,
   ) {
-    this.chatPanel = this.createChatPanel();
+    this.chatPanel = this.createChatPanel(this.projectMetadataContent);
     this.mainCanvasPanel = this.createMainCanvasPanel(this.project);
     this.layersPanel = this.createLayersPanel(this.project);
     this.commandHistoryManager = this.createCommandHistoryManager();
@@ -213,8 +220,8 @@ export class Editor {
           );
         }
       })
-      .on("updateLayerOpacity", (layerId: string) => {
-        this.popupSetLayerOpacity(layerId);
+      .on("updateLayerOpacity", () => {
+        this.openOpacitySliderPopup();
       });
     this.mainCanvasPanel
       .setGetActiveLayerId(() => this.layersPanel.activeLayerId)
@@ -263,7 +270,7 @@ export class Editor {
       .setNewProjectHandler(() => {
         this.newProject();
       })
-      .setDescribeProjectHandler(() => {
+      .setGetProjectMetadataHandler(() => {
         return JSON.stringify(this.project.metadata);
       })
       .setRenameProjectHandler((name: string) => {
@@ -331,6 +338,25 @@ export class Editor {
             this.mainCanvasPanel,
           ),
         );
+      })
+      .setGetActiveLayerInfoHandler(() => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        return JSON.stringify(layer);
+      })
+      .setGetSelectedLayersInfoHandler(() => {
+        const selectedLayerIds = this.layersPanel.selectedLayerIds;
+        if (selectedLayerIds.size === 0) {
+          throw new Error("No selected layers.");
+        }
+        const layers = this.project.metadata.layers.filter((layer) =>
+          selectedLayerIds.has(layer.id),
+        );
+        return JSON.stringify(layers);
       })
       .setLockSelectedLayersHandler(() => {
         const selectedLayers = this.layersPanel.selectedLayerIds;
@@ -429,11 +455,8 @@ export class Editor {
           ),
         );
       })
-      .setOpenPopupToSetActiveLayerOpacityHandler(() => {
-        if (!this.layersPanel.activeLayerId) {
-          throw new Error("No active layer to set opacity.");
-        }
-        this.popupSetLayerOpacity(this.layersPanel.activeLayerId);
+      .setOpenOpacitySliderPopup(() => {
+        this.openOpacitySliderPopup();
       })
       .setZoomInHandler(() => {
         this.mainCanvasPanel.zoomIn();
@@ -444,6 +467,19 @@ export class Editor {
       .setSetZoomHandler((scale: number) => {
         this.mainCanvasPanel.setZoom(scale);
       })
+      .setColorSettingsHandler(
+        (foregroundColor?: string, backgroundColor?: string) => {
+          if (foregroundColor) {
+            this.project.metadata.settings.foregroundColor = foregroundColor;
+          }
+          if (backgroundColor) {
+            this.project.metadata.settings.backgroundColor = backgroundColor;
+          }
+        },
+      )
+      .setOpenColorPickerPopupHandler(() => {
+        this.openColorPickerPopup();
+      })
       .setSelectMoveToolHandler(() => {
         this.mainCanvasPanel.selectMoveTool();
       })
@@ -451,29 +487,41 @@ export class Editor {
         this.mainCanvasPanel.selectPaintTool();
       });
     this.mainCanvasPanel.rerender();
-    this.chatPanel.initialGreet();
+    this.chatPanel.sendAssistantMessage("Hi, can you introduce yourself?");
   }
 
-  private popupSetLayerOpacity(layerId: string): void {
-    const layer = this.project.metadata.layers.find(
-      (layer) => layer.id === layerId,
-    );
-    const popup = this.createSetLayerOpacitySliderPopup(
-      layer,
-      this.layersPanel,
-      this.mainCanvasPanel,
-    ).on("commit", (layer: Layer, oldOpacity: number, newOpacity: number) => {
-      this.commandHistoryManager.pushCommand(
-        new SetLayerOpacityCommand(
-          layer,
-          oldOpacity,
-          newOpacity,
-          this.layersPanel,
-          this.mainCanvasPanel,
-        ),
-      );
-    });
-    this.element.append(popup.element);
+  private openOpacitySliderPopup(): void {
+    if (this.opacitySliderPopup) {
+      return;
+    }
+    this.opacitySliderPopup = this.createSliderPopup(
+      "Set Opacity",
+      100,
+      0,
+      100,
+      "%",
+    )
+      .on("change", (newOpacity: number) => {
+        this.chatPanel.appendChatText(`Set opacity to ${newOpacity}%`);
+      })
+      .on("remove", () => {
+        this.opacitySliderPopup = undefined;
+      });
+    this.element.append(this.opacitySliderPopup.element);
+  }
+
+  private openColorPickerPopup(): void {
+    if (this.colorPickerPopup) {
+      return;
+    }
+    this.colorPickerPopup = this.createColorPickerPopup("#ffffff")
+      .on("change", (newColor: string) => {
+        this.chatPanel.appendChatText(newColor);
+      })
+      .on("remove", () => {
+        this.colorPickerPopup = undefined;
+      });
+    this.element.append(this.colorPickerPopup.element);
   }
 
   public remove(): void {

@@ -27,8 +27,6 @@ export function normalizeProjectMetadata(
   projectMetadata.settings.foregroundColor ??= "#FFFFFF";
   projectMetadata.settings.backgroundColor ??= "#000000";
   projectMetadata.settings.paintToolSettings ??= {};
-  projectMetadata.settings.paintToolSettings.brushColor ??= "#000000";
   projectMetadata.settings.paintToolSettings.brushSize ??= 1;
-  projectMetadata.settings.paintToolSettings.strokeWidth ??= 1;
   return projectMetadata;
 }

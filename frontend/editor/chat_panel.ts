@@ -36,8 +36,13 @@ export interface ChatPanel {
 }
 
 export class ChatPanel extends EventEmitter {
-  public static create(): ChatPanel {
-    return new ChatPanel(SERVICE_CLIENT, ENV_VARS.geminiModel, document);
+  public static create(projectMetadataContent: string): ChatPanel {
+    return new ChatPanel(
+      SERVICE_CLIENT,
+      ENV_VARS.geminiModel,
+      document,
+      projectMetadataContent,
+    );
   }
 
   private static readonly MAX_HISTORY_LENGTH = 100;
@@ -56,6 +61,7 @@ export class ChatPanel extends EventEmitter {
     private serviceClient: WebServiceClient,
     private model: string,
     private document: Document,
+    private projectMetadataDefinitionContent: string,
   ) {
     super();
     let historyRef = new Ref<HTMLDivElement>();
@@ -278,6 +284,11 @@ export class ChatPanel extends EventEmitter {
     this.input.style.height = `${Math.max(this.input.scrollHeight / 16, FONT_M * 1.4 + 1.25 + 0.125)}rem`;
   }
 
+  public appendChatText(text: string): void {
+    this.input.value += text;
+    this.adjustInputHeight();
+  }
+
   public appendMessage(message: ChatMessage): void {
     if (CHAT_CONTEXT_ROLES.includes(message.role)) {
       let role: string = message.role;
@@ -330,10 +341,11 @@ export class ChatPanel extends EventEmitter {
     }
   }
 
-  public async initialGreet(): Promise<void> {
+  public async sendAssistantMessage(content: string): Promise<void> {
+    console.log("Sending assistant message:", content);
     this.appendMessage({
       role: "assistant",
-      parts: [{ text: "Hi, can you introduce yourself?" }],
+      parts: [{ text: content }],
     });
     await this.sendMessage();
   }
@@ -401,8 +413,8 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
-  public setDescribeProjectHandler(handler: () => string): this {
-    this.registeredFunctionHandlers["describeProject"] = handler;
+  public setGetProjectMetadataHandler(handler: () => string): this {
+    this.registeredFunctionHandlers["getProjectMetadata"] = handler;
     return this;
   }
 
@@ -430,6 +442,16 @@ export class ChatPanel extends EventEmitter {
 
   public setDeleteActiveLayerHandler(handler: () => void): this {
     this.registeredFunctionHandlers["deleteActiveLayer"] = handler;
+    return this;
+  }
+
+  public setGetActiveLayerInfoHandler(handler: () => string): this {
+    this.registeredFunctionHandlers["getActiveLayerInfo"] = handler;
+    return this;
+  }
+
+  public setGetSelectedLayersInfoHandler(handler: () => string): this {
+    this.registeredFunctionHandlers["getSelectedLayersInfo"] = handler;
     return this;
   }
 
@@ -469,9 +491,8 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
-  public setOpenPopupToSetActiveLayerOpacityHandler(handler: () => void): this {
-    this.registeredFunctionHandlers["openPopupToSetActiveLayerOpacity"] =
-      handler;
+  public setOpenOpacitySliderPopup(handler: () => void): this {
+    this.registeredFunctionHandlers["openOpacitySliderPopup"] = handler;
     return this;
   }
 
@@ -487,6 +508,18 @@ export class ChatPanel extends EventEmitter {
 
   public setSetZoomHandler(handler: (scale: number) => void): this {
     this.registeredFunctionHandlers["setZoom"] = handler;
+    return this;
+  }
+
+  public setColorSettingsHandler(
+    handler: (foregroundColor?: string, backgroundColor?: string) => void,
+  ): this {
+    this.registeredFunctionHandlers["setColorSettings"] = handler;
+    return this;
+  }
+
+  public setOpenColorPickerPopupHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["openColorPickerPopup"] = handler;
     return this;
   }
 
@@ -517,6 +550,7 @@ export class ChatPanel extends EventEmitter {
                   "Shortcuts are available for: undo (Ctrl+Z), redo (Ctrl+Y or Ctrl+Shift+Z), save (Ctrl+S), open (Ctrl+O), zoom in (Ctrl+Plus), and zoom out (Ctrl+Minus).",
                   "Popup can be closed by clicking or typing outside or pressing Escape.",
                   "Multi-selecting layers can be done by holding down Shift while clicking on layers.",
+                  "Panning the canvas can be done by holding down the Alt key and dragging the mouse.",
                   "Be concise and friendly in your responses.",
                 ].join(" "),
               },
@@ -540,9 +574,8 @@ export class ChatPanel extends EventEmitter {
                   description: "Create a new project with default settings.",
                 },
                 {
-                  name: "describeProject",
-                  description:
-                    "Get every detail about the current project as a JSON string, only excluding image data.",
+                  name: "getProjectMetadata",
+                  description: `Get the metadata about the current project as a JSON string, excluding image data. The metadata's structure is as follows:\n${this.projectMetadataDefinitionContent}`,
                 },
                 {
                   name: "renameProject",
@@ -594,6 +627,16 @@ export class ChatPanel extends EventEmitter {
                   description: "Delete the currently active layer.",
                 },
                 {
+                  name: "getActiveLayerInfo",
+                  description:
+                    "Get information about the currently active layer as a JSON string.",
+                },
+                {
+                  name: "getSelectedLayersInfo",
+                  description:
+                    "Get information about the currently selected layers as a JSON string.",
+                },
+                {
                   name: "lockSelectedLayers",
                   description: "Lock the currently selected layers.",
                 },
@@ -639,9 +682,9 @@ export class ChatPanel extends EventEmitter {
                   },
                 },
                 {
-                  name: "openPopupToSetActiveLayerOpacity",
+                  name: "openOpacitySliderPopup",
                   description:
-                    "Open the popup for setting the active layer's opacity.",
+                    "Open the opacity slider popup, if not already open, to select a new opacity which will be passed to the chat as user input in percentage (0 to 100).",
                 },
                 {
                   name: "zoomIn",
@@ -664,6 +707,31 @@ export class ChatPanel extends EventEmitter {
                     },
                     required: ["scale"],
                   },
+                },
+                {
+                  name: "setColorSettings",
+                  description:
+                    "Set either the foreground color or background color or both of the project.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      foregroundColor: {
+                        type: "string",
+                        description:
+                          "The new foreground color in hex format (e.g., #RRGGBB). Optional.",
+                      },
+                      backgroundColor: {
+                        type: "string",
+                        description:
+                          "The new background color in hex format (e.g., #RRGGBB). Optional.",
+                      },
+                    },
+                  },
+                },
+                {
+                  name: "openColorPickerPopup",
+                  description:
+                    "Open the color picker popup, if not already open, to select a color which will be passed to the chat as user input in hex format (e.g., #RRGGBB).",
                 },
                 {
                   name: "selectMoveTool",
@@ -749,12 +817,12 @@ export class ChatPanel extends EventEmitter {
               this.registeredFunctionHandlers["newProject"],
             );
             return true;
-          case "describeProject":
-            await this.toolCall("describeProject", {}, () => {
-              let description =
-                this.registeredFunctionHandlers["describeProject"]();
+          case "getProjectMetadata":
+            await this.toolCall("getProjectMetadata", {}, () => {
+              let metadata =
+                this.registeredFunctionHandlers["getProjectMetadata"]();
               return {
-                description: description,
+                metadata: metadata,
               };
             });
             return true;
@@ -805,6 +873,24 @@ export class ChatPanel extends EventEmitter {
               {},
               this.registeredFunctionHandlers["deleteActiveLayer"],
             );
+            return true;
+          case "getActiveLayerInfo":
+            await this.toolCall("getActiveLayerInfo", {}, () => {
+              let info =
+                this.registeredFunctionHandlers["getActiveLayerInfo"]();
+              return {
+                info: info,
+              };
+            });
+            return true;
+          case "getSelectedLayersInfo":
+            await this.toolCall("getSelectedLayersInfo", {}, () => {
+              let info =
+                this.registeredFunctionHandlers["getSelectedLayersInfo"]();
+              return {
+                info: info,
+              };
+            });
             return true;
           case "lockSelectedLayers":
             await this.toolCall(
@@ -858,13 +944,11 @@ export class ChatPanel extends EventEmitter {
               },
             );
             return true;
-          case "openPopupToSetActiveLayerOpacity":
+          case "openOpacitySliderPopup":
             await this.toolCall(
-              "openPopupToSetActiveLayerOpacity",
+              "openOpacitySliderPopup",
               {},
-              this.registeredFunctionHandlers[
-                "openPopupToSetActiveLayerOpacity"
-              ],
+              this.registeredFunctionHandlers["openOpacitySliderPopup"],
             );
             return true;
           case "zoomIn":
@@ -891,6 +975,21 @@ export class ChatPanel extends EventEmitter {
               );
             });
             return true;
+          case "setColorSettings":
+            await this.toolCall("setColorSettings", functionCall.args, () => {
+              this.registeredFunctionHandlers["setColorSettings"](
+                functionCall.args?.foregroundColor,
+                functionCall.args?.backgroundColor,
+              );
+            });
+            return true;
+          case "openColorPickerPopup":
+            await this.toolCall(
+              "openColorPickerPopup",
+              {},
+              this.registeredFunctionHandlers["openColorPickerPopup"],
+            );
+            return true;
           case "selectMoveTool":
             await this.toolCall(
               "selectMoveTool",
@@ -906,6 +1005,7 @@ export class ChatPanel extends EventEmitter {
             );
             return true;
           default:
+            console.warn(`Unknown function call: ${functionCall.name}`);
             this.appendMessage({
               role: "functionCall",
               parts: [

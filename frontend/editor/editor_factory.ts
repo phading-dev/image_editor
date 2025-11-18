@@ -1,11 +1,21 @@
+import projectMetadataFilePath = require("./project_metadata.yaml");
 import { Editor } from "./editor";
 import { Project } from "./project";
 import { normalizeProjectMetadata } from "./project_normalizer";
 import { loadFromZip } from "./project_serializer";
 
 export class EditorFactory {
-  public static create(documentBody: HTMLElement): EditorFactory {
-    return new EditorFactory(Editor.create, documentBody);
+  public static async create(
+    documentBody: HTMLElement,
+  ): Promise<EditorFactory> {
+    const projectMetadataContent = await fetch(projectMetadataFilePath).then(
+      (r) => r.text(),
+    );
+    return new EditorFactory(
+      Editor.create,
+      documentBody,
+      projectMetadataContent,
+    );
   }
 
   private editor: Editor;
@@ -13,6 +23,7 @@ export class EditorFactory {
   public constructor(
     private createEditor: typeof Editor.create,
     private documentBody: HTMLElement,
+    private projectMetadataContent: string,
   ) {
     this.newProject();
   }
@@ -27,6 +38,7 @@ export class EditorFactory {
       () => this.newProject(),
       () => this.loadProject(),
       project,
+      this.projectMetadataContent,
     );
     this.documentBody.append(this.editor.element);
   }
@@ -57,6 +69,7 @@ export class EditorFactory {
       () => this.newProject(),
       () => this.loadProject(),
       loadedProject,
+      this.projectMetadataContent,
     );
     this.documentBody.append(this.editor.element);
   }

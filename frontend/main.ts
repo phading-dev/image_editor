@@ -3,8 +3,8 @@ import { normalizeBody } from "./normalize_body";
 
 normalizeBody();
 
-export function main(): void {
-  EditorFactory.create(document.body);
+export async function main(): Promise<void> {
+  await EditorFactory.create(document.body);
 }
 
 main();

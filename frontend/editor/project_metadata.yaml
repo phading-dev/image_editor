@@ -49,12 +49,6 @@
     - name: brushSize
       type: number
       index: 1
-    - name: brushColor
-      type: string
-      index: 2
-    - name: strokeWidth
-      type: number
-      index: 3
 - kind: Message
   name: ProjectSettings
   fields:
@@ -86,4 +80,3 @@
     - name: settings
       type: ProjectSettings
       index: 5
-

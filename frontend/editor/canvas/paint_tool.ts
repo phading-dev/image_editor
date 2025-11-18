@@ -1,4 +1,4 @@
-import { Layer } from "../project_metadata";
+import { Layer, ProjectMetadata } from "../project_metadata";
 
 export class PaintTool {
   private isPainting = false;
@@ -9,6 +9,7 @@ export class PaintTool {
 
   public constructor(
     private readonly canvas: HTMLCanvasElement,
+    private readonly projectMetadata: ProjectMetadata,
     private readonly getActiveLayer: () => Layer,
     private readonly getActiveLayerContext: () => CanvasRenderingContext2D,
     private readonly rerender: () => void,
@@ -114,11 +115,12 @@ export class PaintTool {
     from?: { x: number; y: number },
   ): void {
     from ??= to;
-    this.context.strokeStyle = "#000000";
+    this.context.strokeStyle = this.projectMetadata.settings.foregroundColor;
     let scaleX = Math.abs(this.layer.transform.scaleX);
     let scaleY = Math.abs(this.layer.transform.scaleY);
     let averageScale = (scaleX + scaleY) / 2;
-    this.context.lineWidth = 1 / averageScale;
+    this.context.lineWidth =
+      this.projectMetadata.settings.paintToolSettings.brushSize / averageScale;
     this.context.lineCap = "round";
     this.context.lineJoin = "round";
     this.context.beginPath();

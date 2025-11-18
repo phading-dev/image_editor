@@ -24,5 +24,8 @@
   },
   "scripts": {
     "local": "bundage bwa -ec frontend/entries_local.yaml -b frontend -o frontend/bin & selfage run backend/main_local -- frontend/bin"
-  }
+  },
+  "assetExts": [
+    ".yaml"
+  ]
 }
