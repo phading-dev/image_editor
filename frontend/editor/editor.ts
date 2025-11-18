@@ -6,7 +6,7 @@ import { AddLayerCommand } from "./commands/add_layer_command";
 import { DeleteLayerCommand } from "./commands/delete_layer_command";
 import { HideLayersCommand } from "./commands/hide_layers_command";
 import { LockLayersCommand } from "./commands/lock_layers_command";
-import { MoveCommand } from "./commands/move_command";
+import { MoveLayersCommand } from "./commands/move_layers_command";
 import { PaintCommand } from "./commands/paint_command";
 import { RenameLayerCommand } from "./commands/rename_layer_command";
 import { ReorderLayerCommand } from "./commands/reorder_layer_command";
@@ -244,7 +244,7 @@ export class Editor {
       })
       .on("move", (layers, deltaX, deltaY) => {
         this.commandHistoryManager.pushCommand(
-          new MoveCommand(layers, deltaX, deltaY, this.mainCanvasPanel),
+          new MoveLayersCommand(layers, deltaX, deltaY, this.mainCanvasPanel),
         );
       });
     this.chatPanel

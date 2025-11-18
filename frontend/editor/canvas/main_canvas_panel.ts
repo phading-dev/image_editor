@@ -37,7 +37,6 @@ export class MainCanvasPanel extends EventEmitter {
 
   public readonly element: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
-  private readonly canvasContainer: HTMLDivElement;
   private readonly canvasScrollContainer: HTMLDivElement;
   private readonly activeLayerOutline: HTMLDivElement;
   private readonly context: CanvasRenderingContext2D;
@@ -52,6 +51,7 @@ export class MainCanvasPanel extends EventEmitter {
   private panTool: PanTool;
   private toolSwitch = new TabsSwitcher();
   private selectPreviousTool: () => void;
+  private resizeObserver: ResizeObserver;
 
   public constructor(
     private document: Document,
@@ -59,7 +59,6 @@ export class MainCanvasPanel extends EventEmitter {
   ) {
     super();
     let canvasRef = new Ref<HTMLCanvasElement>();
-    let canvasContainerRef = new Ref<HTMLDivElement>();
     let canvasScrollContainerRef = new Ref<HTMLDivElement>();
     let activeLayerOutlineRef = new Ref<HTMLDivElement>();
     let zoomLevelDisplayRef = new Ref<HTMLSpanElement>();
@@ -80,44 +79,49 @@ export class MainCanvasPanel extends EventEmitter {
       },
       E.div(
         {
-          ref: canvasScrollContainerRef,
           style: [
             "flex:1 0 0",
             "min-height:0",
             "width:100%",
-            "overflow:auto",
+            "position:relative",
+            "overflow:hidden",
             "display:flex",
-            "padding:2rem",
-            "box-sizing:border-box",
-            "touch-action:none",
+            "flex-direction:column",
           ].join("; "),
         },
         E.div(
           {
-            ref: canvasContainerRef,
+            ref: canvasScrollContainerRef,
             style: [
-              "position: relative",
-              "margin: auto",
-              "flex: 0 0 auto",
-              "overflow: hidden",
-              "width: " + this.project.metadata.width + "px",
-              "height: " + this.project.metadata.height + "px",
+              "flex:1 0 0",
+              "min-height:0",
+              "width:100%",
+              "overflow:auto",
+              "display:flex",
+              "padding:5rem",
+              "box-sizing:border-box",
+              "touch-action:none",
             ].join("; "),
           },
           E.canvas({
             ref: canvasRef,
-            style: "width: 100%; height: 100%;",
-          }),
-          E.div({
-            ref: activeLayerOutlineRef,
             style: [
-              "position: absolute",
-              "pointer-events: none",
-              `border: 2px dashed ${COLOR_THEME.neutral3}`,
-              "display: none",
+              "margin: auto",
+              "flex: 0 0 auto",
+              "width: " + this.project.metadata.width + "px",
+              "height: " + this.project.metadata.height + "px",
             ].join("; "),
           }),
         ),
+        E.div({
+          ref: activeLayerOutlineRef,
+          style: [
+            "position: absolute",
+            "pointer-events: none",
+            `border: 2px dashed ${COLOR_THEME.neutral3}`,
+            "display: none",
+          ].join("; "),
+        }),
       ),
       E.div(
         {
@@ -206,7 +210,6 @@ export class MainCanvasPanel extends EventEmitter {
     );
     if (
       !canvasRef.val ||
-      !canvasContainerRef.val ||
       !canvasScrollContainerRef.val ||
       !activeLayerOutlineRef.val ||
       !zoomLevelDisplayRef.val ||
@@ -216,7 +219,6 @@ export class MainCanvasPanel extends EventEmitter {
       throw new Error("MainCanvasPanel failed to initialize DOM refs.");
     }
     this.canvas = canvasRef.val;
-    this.canvasContainer = canvasContainerRef.val;
     this.canvasScrollContainer = canvasScrollContainerRef.val;
     this.activeLayerOutline = activeLayerOutlineRef.val;
     this.zoomLevelDisplay = zoomLevelDisplayRef.val;
@@ -231,6 +233,13 @@ export class MainCanvasPanel extends EventEmitter {
     this.zoomInButton.addEventListener("click", () => this.zoomIn());
     this.document.addEventListener("keydown", this.handleKeyDown);
     this.document.addEventListener("keyup", this.handleKeyUp);
+    this.canvasScrollContainer.addEventListener("scroll", () => {
+      this.drawActiveLayerOutline();
+    });
+    this.resizeObserver = new ResizeObserver(() => {
+      this.drawActiveLayerOutline();
+    });
+    this.resizeObserver.observe(this.canvasScrollContainer);
 
     this.selectMoveTool();
   }
@@ -250,8 +259,8 @@ export class MainCanvasPanel extends EventEmitter {
   };
 
   public rerender(): void {
-    this.canvasContainer.style.width = `${this.project.metadata.width * this.scaleFactor}px`;
-    this.canvasContainer.style.height = `${this.project.metadata.height * this.scaleFactor}px`;
+    this.canvas.style.width = `${this.project.metadata.width * this.scaleFactor}px`;
+    this.canvas.style.height = `${this.project.metadata.height * this.scaleFactor}px`;
     this.drawActiveLayerOutline();
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     // Draw checkerboard pattern to indicate transparency
@@ -306,17 +315,27 @@ export class MainCanvasPanel extends EventEmitter {
     const transform = activeLayer.transform;
     const width = activeLayer.width * transform.scaleX;
     const height = activeLayer.height * transform.scaleY;
-    const x = transform.translateX;
-    const y = transform.translateY;
-
     // Add a small offset so the outline is visible around the layer edges
     const outlineOffset = 2; // pixels at 1x scale
+    const x = transform.translateX - outlineOffset;
+    const y = transform.translateY - outlineOffset;
+    // Calculate padding to allow scrolling to the outline
+    const left =
+      x * this.scaleFactor +
+      this.canvas.offsetLeft -
+      this.canvasScrollContainer.scrollLeft;
+    const top =
+      y * this.scaleFactor +
+      this.canvas.offsetTop -
+      this.canvasScrollContainer.scrollTop;
+    const rectWidth = width * this.scaleFactor;
+    const rectHeight = height * this.scaleFactor;
 
     // Position and size the outline (in canvas coordinates, will scale with container)
-    this.activeLayerOutline.style.left = `${(x - outlineOffset) * this.scaleFactor}px`;
-    this.activeLayerOutline.style.top = `${(y - outlineOffset) * this.scaleFactor}px`;
-    this.activeLayerOutline.style.width = `${width * this.scaleFactor}px`;
-    this.activeLayerOutline.style.height = `${height * this.scaleFactor}px`;
+    this.activeLayerOutline.style.left = `${left}px`;
+    this.activeLayerOutline.style.top = `${top}px`;
+    this.activeLayerOutline.style.width = `${rectWidth}px`;
+    this.activeLayerOutline.style.height = `${rectHeight}px`;
     this.activeLayerOutline.style.display = "block";
   }
 
@@ -474,5 +493,6 @@ export class MainCanvasPanel extends EventEmitter {
   public remove(): void {
     this.canvas.remove();
     this.removeAllListeners();
+    this.resizeObserver.disconnect();
   }
 }

@@ -18,7 +18,7 @@ export class MoveTool {
     ) => void,
     private readonly warning: (message: string) => void,
   ) {
-    this.canvas.style.cursor = "move";
+    this.canvasContainer.style.cursor = "move";
     this.canvasContainer.addEventListener(
       "pointerdown",
       this.handlePointerDown,
@@ -120,7 +120,7 @@ export class MoveTool {
   }
 
   public remove(): void {
-    this.canvas.style.cursor = "";
+    this.canvasContainer.style.cursor = "";
     this.canvasContainer.removeEventListener(
       "pointerdown",
       this.handlePointerDown,
