@@ -21,13 +21,13 @@ const DISPLAY_ROLES = ["user", "error", "warning", "modelResponse"];
 
 interface ChatMessage {
   role:
-    | "user"
-    | "error"
-    | "warning"
-    | "assistant"
-    | "modelResponse"
-    | "functionCall"
-    | "functionResponse";
+  | "user"
+  | "error"
+  | "warning"
+  | "assistant"
+  | "modelResponse"
+  | "functionCall"
+  | "functionResponse";
   parts: any[];
 }
 
@@ -528,6 +528,11 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setSelectTransformToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectTransformTool"] = handler;
+    return this;
+  }
+
   public setSelectPaintToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectPaintTool"] = handler;
     return this;
@@ -737,6 +742,11 @@ export class ChatPanel extends EventEmitter {
                   name: "selectMoveTool",
                   description:
                     "Switch to the move tool to reposition the images of all selected layers.",
+                },
+                {
+                  name: "selectTransformTool",
+                  description:
+                    "Switch to the transform tool to resize, rotate, or move the images of the active layer.",
                 },
                 {
                   name: "selectPaintTool",
@@ -995,6 +1005,13 @@ export class ChatPanel extends EventEmitter {
               "selectMoveTool",
               {},
               this.registeredFunctionHandlers["selectMoveTool"],
+            );
+            return true;
+          case "selectTransformTool":
+            await this.toolCall(
+              "selectTransformTool",
+              {},
+              this.registeredFunctionHandlers["selectTransformTool"],
             );
             return true;
           case "selectPaintTool":

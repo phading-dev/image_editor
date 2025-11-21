@@ -12,6 +12,7 @@ import { RenameLayerCommand } from "./commands/rename_layer_command";
 import { ReorderLayerCommand } from "./commands/reorder_layer_command";
 import { SetLayerOpacityCommand } from "./commands/set_layer_opacity_command";
 import { ShowLayersCommand } from "./commands/show_layers_command";
+import { TransformLayerCommand } from "./commands/transform_layer_command";
 import { UnlockLayersCommand } from "./commands/unlock_layers_command";
 import { LayersPanel } from "./layers_panel";
 import { ColorPickerPopup } from "./popup/color_picker_popup";
@@ -245,6 +246,16 @@ export class Editor {
       .on("move", (layers, deltaX, deltaY) => {
         this.commandHistoryManager.pushCommand(
           new MoveLayersCommand(layers, deltaX, deltaY, this.mainCanvasPanel),
+        );
+      })
+      .on("transform", (layer, oldTransform, newTransform) => {
+        this.commandHistoryManager.pushCommand(
+          new TransformLayerCommand(
+            layer,
+            oldTransform,
+            newTransform,
+            this.mainCanvasPanel,
+          ),
         );
       });
     this.chatPanel
@@ -482,6 +493,9 @@ export class Editor {
       })
       .setSelectMoveToolHandler(() => {
         this.mainCanvasPanel.selectMoveTool();
+      })
+      .setSelectTransformToolHandler(() => {
+        this.mainCanvasPanel.selectFreeTransformTool();
       })
       .setSelectPaintToolHandler(() => {
         this.mainCanvasPanel.selectPaintTool();

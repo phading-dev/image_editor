@@ -2,7 +2,8 @@ import EventEmitter = require("events");
 import { COLOR_THEME } from "../../color_theme";
 import { FONT_S } from "../../sizes";
 import { Project } from "../project";
-import { Layer } from "../project_metadata";
+import { Layer, Transform } from "../project_metadata";
+import { FreeTransformTool } from "./free_transform_tool";
 import { MoveTool } from "./move_tool";
 import { PaintTool } from "./paint_tool";
 import { PanTool } from "./pan_tool";
@@ -23,6 +24,14 @@ export interface MainCanvasPanel {
     event: "move",
     listener: (layers: Layer[], deltaX: number, deltaY: number) => void,
   ): this;
+  on(
+    event: "transform",
+    listener: (
+      layer: Layer,
+      oldTransform: Transform,
+      newTransform: Transform,
+    ) => void,
+  ): this;
   on(event: "warning", listener: (message: string) => void): this;
 }
 
@@ -38,6 +47,7 @@ export class MainCanvasPanel extends EventEmitter {
   public readonly element: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly canvasScrollContainer: HTMLDivElement;
+  private readonly outlineContainer: HTMLDivElement;
   private readonly activeLayerOutline: HTMLDivElement;
   private readonly context: CanvasRenderingContext2D;
   private readonly zoomLevelDisplay: HTMLSpanElement;
@@ -48,6 +58,7 @@ export class MainCanvasPanel extends EventEmitter {
   private getSelectedLayerIds: () => Set<string>;
   private paintTool: PaintTool;
   private moveTool: MoveTool;
+  private freeTransformTool: FreeTransformTool;
   private panTool: PanTool;
   private toolSwitch = new TabsSwitcher();
   private selectPreviousTool: () => void;
@@ -60,6 +71,7 @@ export class MainCanvasPanel extends EventEmitter {
     super();
     let canvasRef = new Ref<HTMLCanvasElement>();
     let canvasScrollContainerRef = new Ref<HTMLDivElement>();
+    let outlineContainerRef = new Ref<HTMLDivElement>();
     let activeLayerOutlineRef = new Ref<HTMLDivElement>();
     let zoomLevelDisplayRef = new Ref<HTMLSpanElement>();
     let zoomOutButtonRef = new Ref<HTMLButtonElement>();
@@ -113,15 +125,27 @@ export class MainCanvasPanel extends EventEmitter {
             ].join("; "),
           }),
         ),
-        E.div({
-          ref: activeLayerOutlineRef,
-          style: [
-            "position: absolute",
-            "pointer-events: none",
-            `border: 2px dashed ${COLOR_THEME.neutral3}`,
-            "display: none",
-          ].join("; "),
-        }),
+        E.div(
+          {
+            ref: outlineContainerRef,
+            style: [
+              "position: absolute",
+              "pointer-events: none",
+              "display: none",
+            ].join("; "),
+          },
+          E.div({
+            ref: activeLayerOutlineRef,
+            style: [
+              "position: absolute",
+              "pointer-events: none",
+              `border: 2px dashed ${COLOR_THEME.neutral3}`,
+              "will-change: transform",
+              "left: -2px",
+              "top: -2px",
+            ].join("; "),
+          }),
+        ),
       ),
       E.div(
         {
@@ -131,7 +155,7 @@ export class MainCanvasPanel extends EventEmitter {
             "align-items: center",
             "justify-content: center",
             "gap: 0.5rem",
-            `border-top: 1px solid ${COLOR_THEME.neutral3}`,
+            `border-top: 0.0625rem solid ${COLOR_THEME.neutral3}`,
           ].join("; "),
         },
         E.button(
@@ -211,6 +235,7 @@ export class MainCanvasPanel extends EventEmitter {
     if (
       !canvasRef.val ||
       !canvasScrollContainerRef.val ||
+      !outlineContainerRef.val ||
       !activeLayerOutlineRef.val ||
       !zoomLevelDisplayRef.val ||
       !zoomOutButtonRef.val ||
@@ -220,6 +245,7 @@ export class MainCanvasPanel extends EventEmitter {
     }
     this.canvas = canvasRef.val;
     this.canvasScrollContainer = canvasScrollContainerRef.val;
+    this.outlineContainer = outlineContainerRef.val;
     this.activeLayerOutline = activeLayerOutlineRef.val;
     this.zoomLevelDisplay = zoomLevelDisplayRef.val;
     this.zoomOutButton = zoomOutButtonRef.val;
@@ -266,6 +292,7 @@ export class MainCanvasPanel extends EventEmitter {
     // Draw checkerboard pattern to indicate transparency
     this.drawCheckerboard();
     this.render(this.context);
+    this.freeTransformTool?.updateHandlePositions();
   }
 
   private drawCheckerboard(): void {
@@ -307,36 +334,37 @@ export class MainCanvasPanel extends EventEmitter {
   private drawActiveLayerOutline(): void {
     const activeLayer = this.getActiveLayer();
     if (!activeLayer) {
-      this.activeLayerOutline.style.display = "none";
+      this.outlineContainer.style.display = "none";
       return;
     }
 
     // Calculate the bounding box of the layer after transformations
     const transform = activeLayer.transform;
-    const width = activeLayer.width * transform.scaleX;
-    const height = activeLayer.height * transform.scaleY;
-    // Add a small offset so the outline is visible around the layer edges
-    const outlineOffset = 2; // pixels at 1x scale
-    const x = transform.translateX - outlineOffset;
-    const y = transform.translateY - outlineOffset;
-    // Calculate padding to allow scrolling to the outline
+    // Get actual screen positions using getBoundingClientRect for accuracy
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const containerRect = this.canvasScrollContainer.getBoundingClientRect();
+    // Calculate position in screen pixels, then convert to position relative to container and convert to position relative to the scroll container's parent
     const left =
-      x * this.scaleFactor +
-      this.canvas.offsetLeft -
-      this.canvasScrollContainer.scrollLeft;
+      canvasRect.left -
+      containerRect.left +
+      transform.translateX * this.scaleFactor;
     const top =
-      y * this.scaleFactor +
-      this.canvas.offsetTop -
-      this.canvasScrollContainer.scrollTop;
-    const rectWidth = width * this.scaleFactor;
-    const rectHeight = height * this.scaleFactor;
+      canvasRect.top -
+      containerRect.top +
+      transform.translateY * this.scaleFactor;
+    // Position the wrapper container (no rotation)
+    this.outlineContainer.style.left = `${left}px`;
+    this.outlineContainer.style.top = `${top}px`;
+    this.outlineContainer.style.display = "block";
 
-    // Position and size the outline (in canvas coordinates, will scale with container)
-    this.activeLayerOutline.style.left = `${left}px`;
-    this.activeLayerOutline.style.top = `${top}px`;
+    const rectWidth = activeLayer.width * transform.scaleX * this.scaleFactor;
+    const rectHeight = activeLayer.height * transform.scaleY * this.scaleFactor;
+    // The outline div handles rotation and size
     this.activeLayerOutline.style.width = `${rectWidth}px`;
     this.activeLayerOutline.style.height = `${rectHeight}px`;
-    this.activeLayerOutline.style.display = "block";
+    // Transform origin should be the top-left of the layer content excluding the border
+    this.activeLayerOutline.style.transformOrigin = `2px 2px`;
+    this.activeLayerOutline.style.transform = `rotate(${transform.rotation}deg)`;
   }
 
   private updateZoomDisplay(): void {
@@ -442,6 +470,29 @@ export class MainCanvasPanel extends EventEmitter {
       },
       () => {
         this.moveTool.remove();
+      },
+    );
+  }
+
+  public selectFreeTransformTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.freeTransformTool = new FreeTransformTool(
+          this.canvasScrollContainer,
+          this.canvas,
+          this.outlineContainer,
+          () => this.scaleFactor,
+          () => this.getActiveLayer(),
+          () => this.rerender(),
+          (layer, oldTransform, newTransform) =>
+            this.emit("transform", layer, oldTransform, newTransform),
+          (message: string) => this.emit("warning", message),
+        );
+        this.freeTransformTool.updateHandlePositions();
+        this.selectPreviousTool = () => this.selectFreeTransformTool();
+      },
+      () => {
+        this.freeTransformTool.remove();
       },
     );
   }
