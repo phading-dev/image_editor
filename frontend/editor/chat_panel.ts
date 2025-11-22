@@ -21,13 +21,13 @@ const DISPLAY_ROLES = ["user", "error", "warning", "modelResponse"];
 
 interface ChatMessage {
   role:
-    | "user"
-    | "error"
-    | "warning"
-    | "assistant"
-    | "modelResponse"
-    | "functionCall"
-    | "functionResponse";
+  | "user"
+  | "error"
+  | "warning"
+  | "assistant"
+  | "modelResponse"
+  | "functionCall"
+  | "functionResponse";
   parts: any[];
 }
 
@@ -767,7 +767,7 @@ export class ChatPanel extends EventEmitter {
                 {
                   name: "selectMoveTool",
                   description:
-                    "Switch to the move tool to reposition the images of all selected layers.",
+                    "Switch to the move tool to reposition the images of all selected layers. Holding shift while moving will snap to horizontal and vertical movement.",
                 },
                 {
                   name: "moveSelectedLayers",
@@ -793,7 +793,7 @@ export class ChatPanel extends EventEmitter {
                 {
                   name: "selectTransformTool",
                   description:
-                    "Switch to the transform tool to resize, rotate, or move the images of the active layer.",
+                    "Switch to the transform tool to resize, rotate, or move the images of the active layer. Holding shift while moving will snap to horizontal and vertical movement. Holding shift while resizing will lock the aspect ratio. Holding shift while rotating will snap to 15 degree increments.",
                 },
                 {
                   name: "transformActiveLayer",

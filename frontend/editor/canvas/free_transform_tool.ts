@@ -201,7 +201,7 @@ export class FreeTransformTool {
     const deltaY = currentPoint.y - this.initialPointerPos.y;
 
     if (this.dragType === "move") {
-      this.handleMove(deltaX, deltaY);
+      this.handleMove(deltaX, deltaY, event.shiftKey);
     } else if (this.dragType?.startsWith("rotator")) {
       this.handleRotate(currentPoint, event.shiftKey);
     } else if (this.dragType === "pivot") {
@@ -213,7 +213,18 @@ export class FreeTransformTool {
     this.rerender();
   };
 
-  private handleMove(deltaX: number, deltaY: number): void {
+  private handleMove(
+    deltaX: number,
+    deltaY: number,
+    shouldSnap: boolean,
+  ): void {
+    if (shouldSnap) {
+      if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        deltaY = 0;
+      } else {
+        deltaX = 0;
+      }
+    }
     this.layer!.transform.translateX =
       this.initialTransform!.translateX + deltaX;
     this.layer!.transform.translateY =
@@ -283,7 +294,7 @@ export class FreeTransformTool {
     let newRotation = initial.rotation + rotationDelta;
 
     if (shouldSnap) {
-      const snapAngle = 45;
+      const snapAngle = 15;
       newRotation = Math.round(newRotation / snapAngle) * snapAngle;
     }
 

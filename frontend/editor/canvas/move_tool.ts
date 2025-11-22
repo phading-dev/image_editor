@@ -4,7 +4,7 @@ export class MoveTool {
   private isDragging = false;
   private layers: Layer[];
   private initialTransforms?: Array<{ x: number; y: number }>;
-  private lastCanvasPoint?: { x: number; y: number };
+  private initialPointerPos?: { x: number; y: number };
 
   public constructor(
     private readonly canvasContainer: HTMLElement,
@@ -63,7 +63,7 @@ export class MoveTool {
     event.preventDefault();
     this.isDragging = true;
     this.canvasContainer.setPointerCapture(event.pointerId);
-    this.lastCanvasPoint = this.eventToCanvasPoint(event);
+    this.initialPointerPos = this.eventToCanvasPoint(event);
     this.initialTransforms = this.layers.map((layer) => ({
       x: layer.transform.translateX,
       y: layer.transform.translateY,
@@ -71,20 +71,25 @@ export class MoveTool {
   };
 
   private handlePointerMove = (event: PointerEvent): void => {
-    if (!this.isDragging || !this.lastCanvasPoint) {
+    if (!this.isDragging || !this.initialPointerPos) {
       return;
     }
     event.preventDefault();
-    let currentPoint = this.eventToCanvasPoint(event);
-    let delta = {
-      x: currentPoint.x - this.lastCanvasPoint.x,
-      y: currentPoint.y - this.lastCanvasPoint.y,
-    };
-    this.layers.forEach((layer) => {
-      layer.transform.translateX = layer.transform.translateX + delta.x;
-      layer.transform.translateY = layer.transform.translateY + delta.y;
+    const currentPoint = this.eventToCanvasPoint(event);
+    let deltaX = currentPoint.x - this.initialPointerPos.x;
+    let deltaY = currentPoint.y - this.initialPointerPos.y;
+    if (event.shiftKey) {
+      if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        deltaY = 0;
+      } else {
+        deltaX = 0;
+      }
+    }
+    this.layers.forEach((layer, index) => {
+      const initial = this.initialTransforms![index];
+      layer.transform.translateX = initial.x + deltaX;
+      layer.transform.translateY = initial.y + deltaY;
     });
-    this.lastCanvasPoint = currentPoint;
     this.rerender();
   };
 
