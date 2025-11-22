@@ -21,13 +21,13 @@ const DISPLAY_ROLES = ["user", "error", "warning", "modelResponse"];
 
 interface ChatMessage {
   role:
-  | "user"
-  | "error"
-  | "warning"
-  | "assistant"
-  | "modelResponse"
-  | "functionCall"
-  | "functionResponse";
+    | "user"
+    | "error"
+    | "warning"
+    | "assistant"
+    | "modelResponse"
+    | "functionCall"
+    | "functionResponse";
   parts: any[];
 }
 
@@ -342,7 +342,6 @@ export class ChatPanel extends EventEmitter {
   }
 
   public async sendAssistantMessage(content: string): Promise<void> {
-    console.log("Sending assistant message:", content);
     this.appendMessage({
       role: "assistant",
       parts: [{ text: content }],
@@ -538,6 +537,33 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setMoveSelectedLayersHandler(
+    handler: (deltaX: number, deltaY: number) => { warning: string },
+  ): this {
+    this.registeredFunctionHandlers["moveSelectedLayers"] = handler;
+    return this;
+  }
+
+  public setTransformActiveLayerHandler(
+    handler: (transform: {
+      translateX?: number;
+      translateY?: number;
+      scaleX?: number;
+      scaleY?: number;
+      rotation?: number;
+    }) => void,
+  ): this {
+    this.registeredFunctionHandlers["transformActiveLayer"] = handler;
+    return this;
+  }
+
+  public setResizeActiveLayerHandler(
+    handler: (dimensions: { width?: number; height?: number }) => void,
+  ): this {
+    this.registeredFunctionHandlers["resizeActiveLayer"] = handler;
+    return this;
+  }
+
   private async generateContent(): Promise<void> {
     while (true) {
       let response = await this.serviceClient.send(
@@ -556,7 +582,7 @@ export class ChatPanel extends EventEmitter {
                   "Popup can be closed by clicking or typing outside or pressing Escape.",
                   "Multi-selecting layers can be done by holding down Shift while clicking on layers.",
                   "Panning the canvas can be done by holding down the Alt key and dragging the mouse.",
-                  "Be concise and friendly in your responses.",
+                  "Be concise and friendly in your responses. No need to confirm actions, because the user can always undo them.",
                 ].join(" "),
               },
             ],
@@ -744,9 +770,82 @@ export class ChatPanel extends EventEmitter {
                     "Switch to the move tool to reposition the images of all selected layers.",
                 },
                 {
+                  name: "moveSelectedLayers",
+                  description:
+                    "Move all selected layers by the specified delta in pixels. This is similar to using the move tool.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      deltaX: {
+                        type: "number",
+                        description:
+                          "Horizontal movement in pixels. Positive values move right, negative values move left.",
+                      },
+                      deltaY: {
+                        type: "number",
+                        description:
+                          "Vertical movement in pixels. Positive values move down, negative values move up.",
+                      },
+                    },
+                    required: ["deltaX", "deltaY"],
+                  },
+                },
+                {
                   name: "selectTransformTool",
                   description:
                     "Switch to the transform tool to resize, rotate, or move the images of the active layer.",
+                },
+                {
+                  name: "transformActiveLayer",
+                  description:
+                    "Transform the active layer with optional translate, rotate, and scale parameters. Any unspecified parameters will retain their original values.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      translateX: {
+                        type: "number",
+                        description:
+                          "Horizontal translation in pixels. Optional.",
+                      },
+                      translateY: {
+                        type: "number",
+                        description:
+                          "Vertical translation in pixels. Optional.",
+                      },
+                      scaleX: {
+                        type: "number",
+                        description:
+                          "Horizontal scale factor (e.g., 1.5 for 150%, 0.5 for 50%). Optional.",
+                      },
+                      scaleY: {
+                        type: "number",
+                        description:
+                          "Vertical scale factor (e.g., 1.5 for 150%, 0.5 for 50%). Optional.",
+                      },
+                      rotation: {
+                        type: "number",
+                        description: "Rotation in degrees. Optional.",
+                      },
+                    },
+                  },
+                },
+                {
+                  name: "resizeActiveLayer",
+                  description:
+                    "Resize the active layer to specific dimensions in pixels. This calculates the appropriate scale factors based on the layer's current dimensions.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      width: {
+                        type: "number",
+                        description: "New width in pixels. Optional.",
+                      },
+                      height: {
+                        type: "number",
+                        description: "New height in pixels. Optional.",
+                      },
+                    },
+                  },
                 },
                 {
                   name: "selectPaintTool",
@@ -1007,11 +1106,39 @@ export class ChatPanel extends EventEmitter {
               this.registeredFunctionHandlers["selectMoveTool"],
             );
             return true;
+          case "moveSelectedLayers":
+            await this.toolCall("moveSelectedLayers", functionCall.args, () => {
+              if (typeof functionCall.args?.deltaX !== "number") {
+                throw new Error("deltaX parameter is required.");
+              }
+              if (typeof functionCall.args?.deltaY !== "number") {
+                throw new Error("deltaY parameter is required.");
+              }
+              this.registeredFunctionHandlers["moveSelectedLayers"](
+                functionCall.args.deltaX,
+                functionCall.args.deltaY,
+              );
+            });
+            return true;
           case "selectTransformTool":
             await this.toolCall(
               "selectTransformTool",
               {},
               this.registeredFunctionHandlers["selectTransformTool"],
+            );
+            return true;
+          case "transformActiveLayer":
+            await this.toolCall("transformActiveLayer", functionCall.args, () =>
+              this.registeredFunctionHandlers["transformActiveLayer"](
+                functionCall.args,
+              ),
+            );
+            return true;
+          case "resizeActiveLayer":
+            await this.toolCall("resizeActiveLayer", functionCall.args, () =>
+              this.registeredFunctionHandlers["resizeActiveLayer"](
+                functionCall.args,
+              ),
             );
             return true;
           case "selectPaintTool":

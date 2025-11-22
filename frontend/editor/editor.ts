@@ -494,9 +494,107 @@ export class Editor {
       .setSelectMoveToolHandler(() => {
         this.mainCanvasPanel.selectMoveTool();
       })
+      .setMoveSelectedLayersHandler((deltaX: number, deltaY: number) => {
+        const selectedLayers = this.layersPanel.selectedLayerIds;
+        if (selectedLayers.size === 0) {
+          throw new Error("No layers selected to move.");
+        }
+        const layers = this.project.metadata.layers
+          .filter((layer) => selectedLayers.has(layer.id))
+          .filter((layer) => !layer.locked);
+        if (layers.length === 0) {
+          throw new Error(
+            "All selected layers are locked and cannot be moved.",
+          );
+        }
+        let warning: string;
+        if (layers.length < selectedLayers.size) {
+          warning = "Some selected layers are locked and cannot be moved.";
+        }
+        this.commandHistoryManager.pushCommand(
+          new MoveLayersCommand(layers, deltaX, deltaY, this.mainCanvasPanel),
+        );
+        return {
+          warning,
+        };
+      })
       .setSelectTransformToolHandler(() => {
         this.mainCanvasPanel.selectFreeTransformTool();
       })
+      .setTransformActiveLayerHandler(
+        (transform: {
+          translateX?: number;
+          translateY?: number;
+          scaleX?: number;
+          scaleY?: number;
+          rotation?: number;
+        }) => {
+          if (!this.layersPanel.activeLayerId) {
+            throw new Error("No active layer to transform.");
+          }
+          const layer = this.project.metadata.layers.find(
+            (layer) => layer.id === this.layersPanel.activeLayerId,
+          );
+          if (layer.locked) {
+            throw new Error(
+              "Active layer is locked and cannot be transformed.",
+            );
+          }
+          const oldTransform = { ...layer.transform };
+          const newTransform = {
+            translateX: transform.translateX ?? oldTransform.translateX,
+            translateY: transform.translateY ?? oldTransform.translateY,
+            scaleX: transform.scaleX ?? oldTransform.scaleX,
+            scaleY: transform.scaleY ?? oldTransform.scaleY,
+            rotation: transform.rotation ?? oldTransform.rotation,
+          };
+          this.commandHistoryManager.pushCommand(
+            new TransformLayerCommand(
+              layer,
+              oldTransform,
+              newTransform,
+              this.mainCanvasPanel,
+            ),
+          );
+        },
+      )
+      .setResizeActiveLayerHandler(
+        (dimensions: { width?: number; height?: number }) => {
+          if (!this.layersPanel.activeLayerId) {
+            throw new Error("No active layer to resize.");
+          }
+          const layer = this.project.metadata.layers.find(
+            (layer) => layer.id === this.layersPanel.activeLayerId,
+          );
+          if (layer.locked) {
+            throw new Error("Active layer is locked and cannot be resized.");
+          }
+          const oldTransform = { ...layer.transform };
+          const newScaleX =
+            dimensions.width !== undefined
+              ? dimensions.width / layer.width
+              : oldTransform.scaleX;
+          const newScaleY =
+            dimensions.height !== undefined
+              ? dimensions.height / layer.height
+              : oldTransform.scaleY;
+          const newTransform = {
+            translateX: oldTransform.translateX,
+            translateY: oldTransform.translateY,
+            scaleX: newScaleX,
+            scaleY: newScaleY,
+            rotation: oldTransform.rotation,
+          };
+          this.commandHistoryManager.pushCommand(
+            new TransformLayerCommand(
+              layer,
+              oldTransform,
+              newTransform,
+              this.mainCanvasPanel,
+            ),
+          );
+        },
+      )
       .setSelectPaintToolHandler(() => {
         this.mainCanvasPanel.selectPaintTool();
       });
