@@ -13,6 +13,7 @@ import { ReorderLayerCommand } from "./commands/reorder_layer_command";
 import { SetLayerOpacityCommand } from "./commands/set_layer_opacity_command";
 import { ShowLayersCommand } from "./commands/show_layers_command";
 import { TransformLayerCommand } from "./commands/transform_layer_command";
+import { CropLayerCommand } from "./commands/crop_layer_command";
 import { UnlockLayersCommand } from "./commands/unlock_layers_command";
 import { LayersPanel } from "./layers_panel";
 import { ColorPickerPopup } from "./popup/color_picker_popup";
@@ -255,6 +256,16 @@ export class Editor {
             oldTransform,
             newTransform,
             this.mainCanvasPanel,
+          ),
+        );
+      })
+      .on("crop", (layer, cropRect) => {
+        this.commandHistoryManager.pushCommand(
+          new CropLayerCommand(
+            layer,
+            cropRect,
+            this.mainCanvasPanel,
+            this.project.layersToCanvas,
           ),
         );
       });
@@ -591,6 +602,35 @@ export class Editor {
               oldTransform,
               newTransform,
               this.mainCanvasPanel,
+            ),
+          );
+        },
+      )
+      .setSelectCropToolHandler(() => {
+        this.mainCanvasPanel.selectCropTool();
+      })
+      .setCropActiveLayerHandler(
+        (cropRect: {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        }) => {
+          if (!this.layersPanel.activeLayerId) {
+            throw new Error("No active layer to crop.");
+          }
+          const layer = this.project.metadata.layers.find(
+            (layer) => layer.id === this.layersPanel.activeLayerId,
+          );
+          if (layer.locked) {
+            throw new Error("Active layer is locked and cannot be cropped.");
+          }
+          this.commandHistoryManager.pushCommand(
+            new CropLayerCommand(
+              layer,
+              cropRect,
+              this.mainCanvasPanel,
+              this.project.layersToCanvas,
             ),
           );
         },

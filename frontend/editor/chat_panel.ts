@@ -206,7 +206,7 @@ export class ChatPanel extends EventEmitter {
       this.input.focus();
       this.adjustInputHeight();
     }
-    // Handle backspace/delete/enter
+    // Handle backspace/delete
     else if (event.key === "Backspace" || event.key === "Delete") {
       this.input.focus();
     }
@@ -532,11 +532,6 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
-  public setSelectPaintToolHandler(handler: () => void): this {
-    this.registeredFunctionHandlers["selectPaintTool"] = handler;
-    return this;
-  }
-
   public setMoveSelectedLayersHandler(
     handler: (deltaX: number, deltaY: number) => { warning: string },
   ): this {
@@ -557,10 +552,32 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setSelectCropToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectCropTool"] = handler;
+    return this;
+  }
+
+  public setCropActiveLayerHandler(
+    handler: (cropRect: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }) => void,
+  ): this {
+    this.registeredFunctionHandlers["cropActiveLayer"] = handler;
+    return this;
+  }
+
   public setResizeActiveLayerHandler(
     handler: (dimensions: { width?: number; height?: number }) => void,
   ): this {
     this.registeredFunctionHandlers["resizeActiveLayer"] = handler;
+    return this;
+  }
+
+  public setSelectPaintToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectPaintTool"] = handler;
     return this;
   }
 
@@ -582,7 +599,7 @@ export class ChatPanel extends EventEmitter {
                   "Popup can be closed by clicking or typing outside or pressing Escape.",
                   "Multi-selecting layers can be done by holding down Shift while clicking on layers.",
                   "Panning the canvas can be done by holding down the Alt key and dragging the mouse.",
-                  "Be concise and friendly in your responses. No need to confirm actions, because the user can always undo them.",
+                  "Be concise and friendly in your responses. No need to confirm actions, because the user can always undo them. Even if the request is ambiguous, act first and then ask for clarification.",
                 ].join(" "),
               },
             ],
@@ -845,6 +862,42 @@ export class ChatPanel extends EventEmitter {
                         description: "New height in pixels. Optional.",
                       },
                     },
+                  },
+                },
+                {
+                  name: "selectCropTool",
+                  description:
+                    "Switch to the crop tool to crop the active layer. This will rasterize any existing rotation and scale. Holding shift while cropping will keep the aspect ratio. Double click to commit the crop.",
+                },
+                {
+                  name: "cropActiveLayer",
+                  description:
+                    "Crop the active layer to the specified rectangle. This will rasterize any existing rotation and scale.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      x: {
+                        type: "number",
+                        description:
+                          "The x coordinate of the crop rectangle in canvas pixels.",
+                      },
+                      y: {
+                        type: "number",
+                        description:
+                          "The y coordinate of the crop rectangle in canvas pixels.",
+                      },
+                      width: {
+                        type: "number",
+                        description:
+                          "The width of the crop rectangle in pixels.",
+                      },
+                      height: {
+                        type: "number",
+                        description:
+                          "The height of the crop rectangle in pixels.",
+                      },
+                    },
+                    required: ["x", "y", "width", "height"],
                   },
                 },
                 {
@@ -1137,6 +1190,20 @@ export class ChatPanel extends EventEmitter {
           case "resizeActiveLayer":
             await this.toolCall("resizeActiveLayer", functionCall.args, () =>
               this.registeredFunctionHandlers["resizeActiveLayer"](
+                functionCall.args,
+              ),
+            );
+            return true;
+          case "selectCropTool":
+            await this.toolCall(
+              "selectCropTool",
+              {},
+              this.registeredFunctionHandlers["selectCropTool"],
+            );
+            return true;
+          case "cropActiveLayer":
+            await this.toolCall("cropActiveLayer", functionCall.args, () =>
+              this.registeredFunctionHandlers["cropActiveLayer"](
                 functionCall.args,
               ),
             );

@@ -3,6 +3,7 @@ import { COLOR_THEME } from "../../color_theme";
 import { FONT_S } from "../../sizes";
 import { Project } from "../project";
 import { Layer, Transform } from "../project_metadata";
+import { CropTool } from "./crop_tool";
 import { FreeTransformTool } from "./free_transform_tool";
 import { MoveTool } from "./move_tool";
 import { PaintTool } from "./paint_tool";
@@ -32,6 +33,13 @@ export interface MainCanvasPanel {
       newTransform: Transform,
     ) => void,
   ): this;
+  on(
+    event: "crop",
+    listener: (
+      layer: Layer,
+      cropRect: { x: number; y: number; width: number; height: number },
+    ) => void,
+  ): this;
   on(event: "warning", listener: (message: string) => void): this;
 }
 
@@ -47,6 +55,7 @@ export class MainCanvasPanel extends EventEmitter {
   public readonly element: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly canvasScrollContainer: HTMLDivElement;
+  private readonly outlineContainerParent: HTMLDivElement;
   private readonly outlineContainer: HTMLDivElement;
   private readonly activeLayerOutline: HTMLDivElement;
   private readonly context: CanvasRenderingContext2D;
@@ -59,6 +68,7 @@ export class MainCanvasPanel extends EventEmitter {
   private paintTool: PaintTool;
   private moveTool: MoveTool;
   private freeTransformTool: FreeTransformTool;
+  private cropTool: CropTool;
   private panTool: PanTool;
   private toolSwitch = new TabsSwitcher();
   private selectPreviousTool: () => void;
@@ -71,6 +81,7 @@ export class MainCanvasPanel extends EventEmitter {
     super();
     let canvasRef = new Ref<HTMLCanvasElement>();
     let canvasScrollContainerRef = new Ref<HTMLDivElement>();
+    let outlineContainerParentRef = new Ref<HTMLDivElement>();
     let outlineContainerRef = new Ref<HTMLDivElement>();
     let activeLayerOutlineRef = new Ref<HTMLDivElement>();
     let zoomLevelDisplayRef = new Ref<HTMLSpanElement>();
@@ -91,6 +102,7 @@ export class MainCanvasPanel extends EventEmitter {
       },
       E.div(
         {
+          ref: outlineContainerParentRef,
           style: [
             "flex:1 0 0",
             "min-height:0",
@@ -235,6 +247,7 @@ export class MainCanvasPanel extends EventEmitter {
     if (
       !canvasRef.val ||
       !canvasScrollContainerRef.val ||
+      !outlineContainerParentRef.val ||
       !outlineContainerRef.val ||
       !activeLayerOutlineRef.val ||
       !zoomLevelDisplayRef.val ||
@@ -245,6 +258,7 @@ export class MainCanvasPanel extends EventEmitter {
     }
     this.canvas = canvasRef.val;
     this.canvasScrollContainer = canvasScrollContainerRef.val;
+    this.outlineContainerParent = outlineContainerParentRef.val;
     this.outlineContainer = outlineContainerRef.val;
     this.activeLayerOutline = activeLayerOutlineRef.val;
     this.zoomLevelDisplay = zoomLevelDisplayRef.val;
@@ -293,6 +307,7 @@ export class MainCanvasPanel extends EventEmitter {
     this.drawCheckerboard();
     this.render(this.context);
     this.freeTransformTool?.updateHandlePositions();
+    this.cropTool?.updateOverlayAndHandles();
   }
 
   private drawCheckerboard(): void {
@@ -493,6 +508,26 @@ export class MainCanvasPanel extends EventEmitter {
       },
       () => {
         this.freeTransformTool.remove();
+      },
+    );
+  }
+
+  public selectCropTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.cropTool = new CropTool(
+          this.outlineContainerParent,
+          this.canvasScrollContainer,
+          this.canvas,
+          () => this.scaleFactor,
+          () => this.getActiveLayer(),
+          (layer, cropRect) => this.emit("crop", layer, cropRect),
+          (message) => this.emit("warning", message),
+        );
+        this.selectPreviousTool = () => this.selectCropTool();
+      },
+      () => {
+        this.cropTool.remove();
       },
     );
   }
