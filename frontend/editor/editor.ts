@@ -2,6 +2,7 @@ import { COLOR_THEME } from "../color_theme";
 import { MainCanvasPanel } from "./canvas/main_canvas_panel";
 import { ChatPanel } from "./chat_panel";
 import { CommandHistoryManager } from "./command_history_manager";
+import { AddImageLayerCommand } from "./commands/add_image_layer_command";
 import { AddLayerCommand } from "./commands/add_layer_command";
 import { CropLayerCommand } from "./commands/crop_layer_command";
 import { DeleteLayerCommand } from "./commands/delete_layer_command";
@@ -20,7 +21,7 @@ import { LayersPanel } from "./layers_panel";
 import { ColorPickerPopup } from "./popup/color_picker_popup";
 import { SliderPopup } from "./popup/slider_popup";
 import { Project } from "./project";
-import { saveToZip } from "./project_serializer";
+import { loadImage, saveToZip } from "./project_serializer";
 import { E } from "@selfage/element/factory";
 
 class ResizeHandle {
@@ -354,6 +355,63 @@ export class Editor {
             this.mainCanvasPanel,
           ),
         );
+      })
+      .setLoadImageHandler(() => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".png,.jpg,.jpeg,.webp,.gif,image/*";
+        input.onchange = async (e) => {
+          const file = (e.target as HTMLInputElement).files?.[0];
+          if (!file) {
+            return;
+          }
+          try {
+            const image = await loadImage(file);
+            // Create canvas with image dimensions
+            const canvas = document.createElement("canvas");
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+            const context = canvas.getContext("2d");
+            context.drawImage(image, 0, 0);
+
+            this.commandHistoryManager.pushCommand(
+              new AddImageLayerCommand(
+                this.project,
+                {
+                  id: crypto.randomUUID(),
+                  name: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
+                  width: image.naturalWidth,
+                  height: image.naturalHeight,
+                  visible: true,
+                  opacity: 100,
+                  locked: false,
+                  transform: {
+                    rotation: 0,
+                    scaleX: 1,
+                    scaleY: 1,
+                    translateX: 0,
+                    translateY: 0,
+                  },
+                },
+                canvas,
+                this.layersPanel,
+                this.mainCanvasPanel,
+              ),
+            );
+          } catch (error) {
+            this.chatPanel.appendMessage({
+              role: "warning",
+              parts: [
+                {
+                  text:
+                    "Failed to load image: " +
+                    (error instanceof Error ? error.message : String(error)),
+                },
+              ],
+            });
+          }
+        };
+        input.click();
       })
       .setDeleteActiveLayerHandler(() => {
         if (!this.layersPanel.activeLayerId) {

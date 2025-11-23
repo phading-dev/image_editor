@@ -73,7 +73,7 @@ async function loadCanvas(
   layersToCanvas.set(layerId, canvas);
 }
 
-function loadImage(blob: Blob): Promise<HTMLImageElement> {
+export function loadImage(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);

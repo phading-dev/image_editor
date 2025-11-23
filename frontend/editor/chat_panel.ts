@@ -21,13 +21,13 @@ const DISPLAY_ROLES = ["user", "error", "warning", "modelResponse"];
 
 interface ChatMessage {
   role:
-    | "user"
-    | "error"
-    | "warning"
-    | "assistant"
-    | "modelResponse"
-    | "functionCall"
-    | "functionResponse";
+  | "user"
+  | "error"
+  | "warning"
+  | "assistant"
+  | "modelResponse"
+  | "functionCall"
+  | "functionResponse";
   parts: any[];
 }
 
@@ -439,6 +439,11 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setLoadImageHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["loadImage"] = handler;
+    return this;
+  }
+
   public setDeleteActiveLayerHandler(handler: () => void): this {
     this.registeredFunctionHandlers["deleteActiveLayer"] = handler;
     return this;
@@ -687,6 +692,11 @@ export class ChatPanel extends EventEmitter {
                 {
                   name: "addNewLayer",
                   description: "Add a new layer to the project.",
+                },
+                {
+                  name: "loadImage",
+                  description:
+                    "Launch a file picker to load an image file. A file may or may not be selected depending on the user. If an image is selected, it will be added as a new layer. If this is the first layer in the project, the canvas will be resized to match the image dimensions.",
                 },
                 {
                   name: "deleteActiveLayer",
@@ -1080,6 +1090,13 @@ export class ChatPanel extends EventEmitter {
               "addNewLayer",
               {},
               this.registeredFunctionHandlers["addNewLayer"],
+            );
+            return true;
+          case "loadImage":
+            await this.toolCall(
+              "loadImage",
+              {},
+              this.registeredFunctionHandlers["loadImage"],
             );
             return true;
           case "deleteActiveLayer":
