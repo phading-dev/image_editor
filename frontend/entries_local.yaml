@@ -2,3 +2,5 @@
 entries:
   - source: main_local
     output: index
+  - source: readme
+    output: readme
