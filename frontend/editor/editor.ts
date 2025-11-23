@@ -3,6 +3,7 @@ import { MainCanvasPanel } from "./canvas/main_canvas_panel";
 import { ChatPanel } from "./chat_panel";
 import { CommandHistoryManager } from "./command_history_manager";
 import { AddLayerCommand } from "./commands/add_layer_command";
+import { CropLayerCommand } from "./commands/crop_layer_command";
 import { DeleteLayerCommand } from "./commands/delete_layer_command";
 import { HideLayersCommand } from "./commands/hide_layers_command";
 import { LockLayersCommand } from "./commands/lock_layers_command";
@@ -10,10 +11,10 @@ import { MoveLayersCommand } from "./commands/move_layers_command";
 import { PaintCommand } from "./commands/paint_command";
 import { RenameLayerCommand } from "./commands/rename_layer_command";
 import { ReorderLayerCommand } from "./commands/reorder_layer_command";
+import { ResizeCanvasCommand } from "./commands/resize_canvas_command";
 import { SetLayerOpacityCommand } from "./commands/set_layer_opacity_command";
 import { ShowLayersCommand } from "./commands/show_layers_command";
 import { TransformLayerCommand } from "./commands/transform_layer_command";
-import { CropLayerCommand } from "./commands/crop_layer_command";
 import { UnlockLayersCommand } from "./commands/unlock_layers_command";
 import { LayersPanel } from "./layers_panel";
 import { ColorPickerPopup } from "./popup/color_picker_popup";
@@ -266,6 +267,18 @@ export class Editor {
             cropRect,
             this.mainCanvasPanel,
             this.project.layersToCanvas,
+          ),
+        );
+      })
+      .on("resizeCanvas", (newWidth, newHeight, deltaX, deltaY) => {
+        this.commandHistoryManager.pushCommand(
+          new ResizeCanvasCommand(
+            this.project,
+            newWidth,
+            newHeight,
+            deltaX,
+            deltaY,
+            this.mainCanvasPanel,
           ),
         );
       });
@@ -610,12 +623,7 @@ export class Editor {
         this.mainCanvasPanel.selectCropTool();
       })
       .setCropActiveLayerHandler(
-        (cropRect: {
-          x: number;
-          y: number;
-          width: number;
-          height: number;
-        }) => {
+        (cropRect: { x: number; y: number; width: number; height: number }) => {
           if (!this.layersPanel.activeLayerId) {
             throw new Error("No active layer to crop.");
           }
@@ -637,7 +645,39 @@ export class Editor {
       )
       .setSelectPaintToolHandler(() => {
         this.mainCanvasPanel.selectPaintTool();
-      });
+      })
+      .setSelectResizeCanvasToolHandler(() => {
+        this.mainCanvasPanel.selectResizeCanvasTool();
+      })
+      .setResizeCanvasHandler(
+        (
+          newWidth?: number,
+          newHeight?: number,
+          deltaX?: number,
+          deltaY?: number,
+        ) => {
+          const finalWidth = newWidth ?? this.project.metadata.width;
+          const finalHeight = newHeight ?? this.project.metadata.height;
+          const finalDeltaX = deltaX ?? 0;
+          const finalDeltaY = deltaY ?? 0;
+          if (finalWidth < 1) {
+            throw new Error("Canvas width must be at least 1 pixel");
+          }
+          if (finalHeight < 1) {
+            throw new Error("Canvas height must be at least 1 pixel");
+          }
+          this.commandHistoryManager.pushCommand(
+            new ResizeCanvasCommand(
+              this.project,
+              finalWidth,
+              finalHeight,
+              finalDeltaX,
+              finalDeltaY,
+              this.mainCanvasPanel,
+            ),
+          );
+        },
+      );
     this.mainCanvasPanel.rerender();
     this.chatPanel.sendAssistantMessage("Hi, can you introduce yourself?");
   }

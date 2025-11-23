@@ -21,13 +21,13 @@ const DISPLAY_ROLES = ["user", "error", "warning", "modelResponse"];
 
 interface ChatMessage {
   role:
-  | "user"
-  | "error"
-  | "warning"
-  | "assistant"
-  | "modelResponse"
-  | "functionCall"
-  | "functionResponse";
+    | "user"
+    | "error"
+    | "warning"
+    | "assistant"
+    | "modelResponse"
+    | "functionCall"
+    | "functionResponse";
   parts: any[];
 }
 
@@ -581,6 +581,23 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setSelectResizeCanvasToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectResizeCanvasTool"] = handler;
+    return this;
+  }
+
+  public setResizeCanvasHandler(
+    handler: (
+      newWidth?: number,
+      newHeight?: number,
+      deltaX?: number,
+      deltaY?: number,
+    ) => void,
+  ): this {
+    this.registeredFunctionHandlers["resizeCanvas"] = handler;
+    return this;
+  }
+
   private async generateContent(): Promise<void> {
     while (true) {
       let response = await this.serviceClient.send(
@@ -593,13 +610,14 @@ export class ChatPanel extends EventEmitter {
                 text: [
                   "You are a helpful assistant named Alice for an image editing application.",
                   "Your role is to help users edit images by interpreting their requests and calling the appropriate functions.",
-                  "The application has layers (like Photoshop), and users can work on an active layer and manage layers.",
+                  "The application has layers (like Photoshop), and users can work on an active (or current) layer and manage layers.",
                   "When users ask to perform actions, use the available functions to execute them.",
                   "Shortcuts are available for: undo (Ctrl+Z), redo (Ctrl+Y or Ctrl+Shift+Z), save (Ctrl+S), open (Ctrl+O), zoom in (Ctrl+Plus), and zoom out (Ctrl+Minus).",
                   "Popup can be closed by clicking or typing outside or pressing Escape.",
                   "Multi-selecting layers can be done by holding down Shift while clicking on layers.",
                   "Panning the canvas can be done by holding down the Alt key and dragging the mouse.",
-                  "Be concise and friendly in your responses. No need to confirm actions, because the user can always undo them. Even if the request is ambiguous, act first and then ask for clarification.",
+                  "Be concise and friendly in your responses.",
+                  "No need to confirm actions, because the user can always undo them. Even if the request is ambiguous, guess what the user wants and act first and then ask for clarification.",
                 ].join(" "),
               },
             ],
@@ -904,6 +922,41 @@ export class ChatPanel extends EventEmitter {
                   name: "selectPaintTool",
                   description:
                     "Switch to the paint/brush tool for drawing on the active layer.",
+                },
+                {
+                  name: "selectResizeCanvasTool",
+                  description:
+                    "Switch to the resize canvas tool to change the canvas dimensions. This adjusts the canvas size and repositions all layers accordingly without rasterizing them. Holding shift while resizing will keep the aspect ratio. Double click to commit the resize.",
+                },
+                {
+                  name: "resizeCanvas",
+                  description:
+                    "Resize the canvas to the specified dimensions and offset. All parameters are optional - if not provided, current canvas dimensions and zero offsets will be used. This will adjust all layer positions by the specified deltas to maintain their visual appearance relative to the canvas edges.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      newWidth: {
+                        type: "number",
+                        description:
+                          "The new canvas width in pixels. Optional - defaults to current canvas width.",
+                      },
+                      newHeight: {
+                        type: "number",
+                        description:
+                          "The new canvas height in pixels. Optional - defaults to current canvas height.",
+                      },
+                      deltaX: {
+                        type: "number",
+                        description:
+                          "Horizontal offset in pixels relative to the original canvas origin. Optional - defaults to 0.",
+                      },
+                      deltaY: {
+                        type: "number",
+                        description:
+                          "Vertical offset in pixels relative to the original canvas origin. Optional - defaults to 0.",
+                      },
+                    },
+                  },
                 },
               ],
             },
@@ -1213,6 +1266,23 @@ export class ChatPanel extends EventEmitter {
               "selectPaintTool",
               {},
               this.registeredFunctionHandlers["selectPaintTool"],
+            );
+            return true;
+          case "selectResizeCanvasTool":
+            await this.toolCall(
+              "selectResizeCanvasTool",
+              {},
+              this.registeredFunctionHandlers["selectResizeCanvasTool"],
+            );
+            return true;
+          case "resizeCanvas":
+            await this.toolCall("resizeCanvas", functionCall.args, () =>
+              this.registeredFunctionHandlers["resizeCanvas"](
+                functionCall.args?.newWidth,
+                functionCall.args?.newHeight,
+                functionCall.args?.deltaX,
+                functionCall.args?.deltaY,
+              ),
             );
             return true;
           default:

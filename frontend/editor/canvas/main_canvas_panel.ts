@@ -8,6 +8,7 @@ import { FreeTransformTool } from "./free_transform_tool";
 import { MoveTool } from "./move_tool";
 import { PaintTool } from "./paint_tool";
 import { PanTool } from "./pan_tool";
+import { ResizeCanvasTool } from "./resize_canvas_tool";
 import { E } from "@selfage/element/factory";
 import { Ref } from "@selfage/ref";
 import { TabsSwitcher } from "@selfage/tabs/switcher";
@@ -40,6 +41,15 @@ export interface MainCanvasPanel {
       cropRect: { x: number; y: number; width: number; height: number },
     ) => void,
   ): this;
+  on(
+    event: "resizeCanvas",
+    listener: (
+      newWidth: number,
+      newHeight: number,
+      deltaX: number,
+      deltaY: number,
+    ) => void,
+  ): this;
   on(event: "warning", listener: (message: string) => void): this;
 }
 
@@ -69,6 +79,7 @@ export class MainCanvasPanel extends EventEmitter {
   private moveTool: MoveTool;
   private freeTransformTool: FreeTransformTool;
   private cropTool: CropTool;
+  private resizeCanvasTool: ResizeCanvasTool;
   private panTool: PanTool;
   private toolSwitch = new TabsSwitcher();
   private selectPreviousTool: () => void;
@@ -264,9 +275,6 @@ export class MainCanvasPanel extends EventEmitter {
     this.zoomLevelDisplay = zoomLevelDisplayRef.val;
     this.zoomOutButton = zoomOutButtonRef.val;
     this.zoomInButton = zoomInButtonRef.val;
-
-    this.canvas.width = this.project.metadata.width;
-    this.canvas.height = this.project.metadata.height;
     this.context = this.canvas.getContext("2d");
 
     this.zoomOutButton.addEventListener("click", () => this.zoomOut());
@@ -275,9 +283,13 @@ export class MainCanvasPanel extends EventEmitter {
     this.document.addEventListener("keyup", this.handleKeyUp);
     this.canvasScrollContainer.addEventListener("scroll", () => {
       this.drawActiveLayerOutline();
+      this.cropTool?.updateOverlayAndHandles();
+      this.resizeCanvasTool?.updateOverlayAndHandles();
     });
     this.resizeObserver = new ResizeObserver(() => {
       this.drawActiveLayerOutline();
+      this.cropTool?.updateOverlayAndHandles();
+      this.resizeCanvasTool?.updateOverlayAndHandles();
     });
     this.resizeObserver.observe(this.canvasScrollContainer);
 
@@ -301,6 +313,8 @@ export class MainCanvasPanel extends EventEmitter {
   public rerender(): void {
     this.canvas.style.width = `${this.project.metadata.width * this.scaleFactor}px`;
     this.canvas.style.height = `${this.project.metadata.height * this.scaleFactor}px`;
+    this.canvas.width = this.project.metadata.width;
+    this.canvas.height = this.project.metadata.height;
     this.drawActiveLayerOutline();
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     // Draw checkerboard pattern to indicate transparency
@@ -308,6 +322,7 @@ export class MainCanvasPanel extends EventEmitter {
     this.render(this.context);
     this.freeTransformTool?.updateHandlePositions();
     this.cropTool?.updateOverlayAndHandles();
+    this.resizeCanvasTool?.updateOverlayAndHandles();
   }
 
   private drawCheckerboard(): void {
@@ -528,6 +543,25 @@ export class MainCanvasPanel extends EventEmitter {
       },
       () => {
         this.cropTool.remove();
+      },
+    );
+  }
+
+  public selectResizeCanvasTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.resizeCanvasTool = new ResizeCanvasTool(
+          this.outlineContainerParent,
+          this.canvasScrollContainer,
+          this.canvas,
+          () => this.scaleFactor,
+          (newWidth, newHeight, deltaX, deltaY) =>
+            this.emit("resizeCanvas", newWidth, newHeight, deltaX, deltaY),
+        );
+        this.selectPreviousTool = () => this.selectResizeCanvasTool();
+      },
+      () => {
+        this.resizeCanvasTool.remove();
       },
     );
   }
