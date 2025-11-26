@@ -2,5 +2,8 @@
 entries:
   - source: main_local
     output: index
-  - source: readme
+  - source: readme_main
     output: readme
+extraAssets:
+  - from: sitemap.xml
+    to: sitemap.xml
