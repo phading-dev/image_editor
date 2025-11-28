@@ -310,6 +310,14 @@ export class LayersPanel extends EventEmitter {
     this.layerRows.get(layerId).rerender();
   }
 
+  public selectLayer(layerId: string): void {
+    const row = this.layerRows.get(layerId);
+    if (row) {
+      this.selectExclusiveLayer(row);
+      this.emit("layerSelectionChanged");
+    }
+  }
+
   private updateEmptyState(): void {
     if (!this.project.metadata.layers.length) {
       this.emptyState.style.display = "block";

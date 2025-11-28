@@ -3,17 +3,21 @@ import { COLOR_THEME } from "../../color_theme";
 import { FONT_S } from "../../sizes";
 import { Project } from "../project";
 import { Layer, Transform } from "../project_metadata";
+import { rasterizeTextLayer } from "../text_rasterizer";
 import { CropTool } from "./crop_tool";
 import { FreeTransformTool } from "./free_transform_tool";
 import { MoveTool } from "./move_tool";
 import { PaintTool } from "./paint_tool";
 import { PanTool } from "./pan_tool";
 import { ResizeCanvasTool } from "./resize_canvas_tool";
+import { SelectTool } from "./select_tool";
+import { TextEditTool } from "./text_edit_tool";
 import { E } from "@selfage/element/factory";
 import { Ref } from "@selfage/ref";
 import { TabsSwitcher } from "@selfage/tabs/switcher";
 
 export interface MainCanvasPanel {
+  on(event: "selectLayer", listener: (layerId: string) => void): this;
   on(
     event: "paint",
     listener: (
@@ -50,6 +54,24 @@ export interface MainCanvasPanel {
       deltaY: number,
     ) => void,
   ): this;
+  on(
+    event: "textEdit",
+    listener: (layer: Layer, oldText: string, newText: string) => void,
+  ): this;
+  on(
+    event: "resizeTextLayer",
+    listener: (
+      layer: Layer,
+      oldWidth: number,
+      oldHeight: number,
+      oldX: number,
+      oldY: number,
+      newWidth: number,
+      newHeight: number,
+      newX: number,
+      newY: number,
+    ) => void,
+  ): this;
   on(event: "warning", listener: (message: string) => void): this;
 }
 
@@ -64,6 +86,7 @@ export class MainCanvasPanel extends EventEmitter {
 
   public readonly element: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
+  private readonly canvasContainer: HTMLDivElement;
   private readonly canvasScrollContainer: HTMLDivElement;
   private readonly outlineContainerParent: HTMLDivElement;
   private readonly outlineContainer: HTMLDivElement;
@@ -81,9 +104,12 @@ export class MainCanvasPanel extends EventEmitter {
   private cropTool: CropTool;
   private resizeCanvasTool: ResizeCanvasTool;
   private panTool: PanTool;
+  private textEditTool: TextEditTool;
+  private selectTool: SelectTool;
   private toolSwitch = new TabsSwitcher();
   private selectPreviousTool: () => void;
   private resizeObserver: ResizeObserver;
+  private layersToTextareas = new Map<string, HTMLTextAreaElement>();
 
   public constructor(
     private document: Document,
@@ -91,6 +117,7 @@ export class MainCanvasPanel extends EventEmitter {
   ) {
     super();
     let canvasRef = new Ref<HTMLCanvasElement>();
+    let canvasContainerRef = new Ref<HTMLDivElement>();
     let canvasScrollContainerRef = new Ref<HTMLDivElement>();
     let outlineContainerParentRef = new Ref<HTMLDivElement>();
     let outlineContainerRef = new Ref<HTMLDivElement>();
@@ -138,15 +165,24 @@ export class MainCanvasPanel extends EventEmitter {
               "touch-action:none",
             ].join("; "),
           },
-          E.canvas({
-            ref: canvasRef,
-            style: [
-              "margin: auto",
-              "flex: 0 0 auto",
-              "width: " + this.project.metadata.width + "px",
-              "height: " + this.project.metadata.height + "px",
-            ].join("; "),
-          }),
+          E.div(
+            {
+              ref: canvasContainerRef,
+              style: [
+                "margin: auto",
+                "flex: 0 0 auto",
+                "width: " + this.project.metadata.width + "px",
+                "height: " + this.project.metadata.height + "px",
+                "position: relative",
+              ].join("; "),
+            },
+            E.canvas({
+              ref: canvasRef,
+              style: ["width: 100%", "height: 100%", "display: block"].join(
+                "; ",
+              ),
+            }),
+          ),
         ),
         E.div(
           {
@@ -257,6 +293,7 @@ export class MainCanvasPanel extends EventEmitter {
     );
     if (
       !canvasRef.val ||
+      !canvasContainerRef.val ||
       !canvasScrollContainerRef.val ||
       !outlineContainerParentRef.val ||
       !outlineContainerRef.val ||
@@ -268,6 +305,7 @@ export class MainCanvasPanel extends EventEmitter {
       throw new Error("MainCanvasPanel failed to initialize DOM refs.");
     }
     this.canvas = canvasRef.val;
+    this.canvasContainer = canvasContainerRef.val;
     this.canvasScrollContainer = canvasScrollContainerRef.val;
     this.outlineContainerParent = outlineContainerParentRef.val;
     this.outlineContainer = outlineContainerRef.val;
@@ -293,11 +331,14 @@ export class MainCanvasPanel extends EventEmitter {
     });
     this.resizeObserver.observe(this.canvasScrollContainer);
 
-    this.selectMoveTool();
+    this.selectSelectTool();
   }
 
   private handleKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === "Alt" && !e.repeat) {
+    if (e.key === "Escape") {
+      this.selectSelectTool();
+      e.preventDefault();
+    } else if (e.key === "Alt" && !e.repeat) {
       this.selectPanTool();
       e.preventDefault();
     }
@@ -311,16 +352,19 @@ export class MainCanvasPanel extends EventEmitter {
   };
 
   public rerender(): void {
-    this.canvas.style.width = `${this.project.metadata.width * this.scaleFactor}px`;
-    this.canvas.style.height = `${this.project.metadata.height * this.scaleFactor}px`;
+    this.canvasContainer.style.width = `${this.project.metadata.width * this.scaleFactor}px`;
+    this.canvasContainer.style.height = `${this.project.metadata.height * this.scaleFactor}px`;
     this.canvas.width = this.project.metadata.width;
     this.canvas.height = this.project.metadata.height;
-    this.drawActiveLayerOutline();
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     // Draw checkerboard pattern to indicate transparency
     this.drawCheckerboard();
-    this.render(this.context);
+    this.renderCanvases(this.context);
+    this.renderTextareas();
+
+    this.drawActiveLayerOutline();
     this.freeTransformTool?.updateHandlePositions();
+    this.textEditTool?.updateHandlePositions();
     this.cropTool?.updateOverlayAndHandles();
     this.resizeCanvasTool?.updateOverlayAndHandles();
   }
@@ -341,14 +385,100 @@ export class MainCanvasPanel extends EventEmitter {
     }
   }
 
-  private render(context: CanvasRenderingContext2D): void {
+  private renderCanvases(context: CanvasRenderingContext2D): void {
     let layers = this.project.metadata.layers;
     for (let index = layers.length - 1; index >= 0; index--) {
       let layer = layers[index];
-      if (layer.visible === false) {
+      if (layer.basicText || layer.visible === false) {
         continue;
       }
       let layerCanvas = this.project.layersToCanvas.get(layer.id);
+      let opacity = Math.max(0, Math.min(1, layer.opacity / 100));
+      context.save();
+      context.globalAlpha = opacity;
+      context.translate(layer.transform.translateX, layer.transform.translateY);
+      // Rotate around the top-left corner to stay consistent with translation.
+      context.rotate((layer.transform.rotation * Math.PI) / 180);
+      context.scale(layer.transform.scaleX, layer.transform.scaleY);
+      context.drawImage(layerCanvas, 0, 0);
+      context.restore();
+    }
+  }
+
+  private renderTextareas(): void {
+    const visitedLayerIds = new Set<string>();
+    let layers = this.project.metadata.layers;
+    for (let index = layers.length - 1; index >= 0; index--) {
+      let layer = layers[index];
+      if (!layer.basicText || layer.visible === false) {
+        continue;
+      }
+      visitedLayerIds.add(layer.id);
+      let textarea = this.layersToTextareas.get(layer.id);
+      if (!textarea) {
+        textarea = document.createElement("textarea");
+        this.layersToTextareas.set(layer.id, textarea);
+        this.canvasContainer.appendChild(textarea);
+      }
+      textarea.value = layer.basicText.content;
+      this.updateTextareaStyle(textarea, layer);
+    }
+    for (const [layerId, textarea] of this.layersToTextareas) {
+      if (!visitedLayerIds.has(layerId)) {
+        textarea.remove();
+        this.layersToTextareas.delete(layerId);
+      }
+    }
+  }
+
+  private updateTextareaStyle(
+    textarea: HTMLTextAreaElement,
+    layer: Layer,
+  ): void {
+    const basicText = layer.basicText;
+    textarea.style.fontFamily = basicText.fontFamily;
+    textarea.style.fontSize = `${basicText.fontSize}px`;
+    textarea.style.fontWeight = basicText.fontWeight;
+    textarea.style.fontStyle = basicText.fontStyle;
+    textarea.style.color = basicText.color;
+    textarea.style.textAlign = basicText.textAlign;
+    textarea.style.lineHeight = `${basicText.lineHeight}`;
+    textarea.style.letterSpacing = `${basicText.letterSpacing}px`;
+    textarea.style.width = `${layer.width}px`;
+    textarea.style.height = `${layer.height}px`;
+    textarea.style.opacity = `${layer.opacity / 100}`;
+    if (layer.shadow) {
+      textarea.style.textShadow = `${layer.shadow.offsetX}px ${layer.shadow.offsetY}px ${layer.shadow.blur}px ${layer.shadow.color}`;
+    }
+
+    // Basic textarea styling
+    textarea.style.position = "absolute";
+    textarea.style.resize = "none";
+    textarea.style.border = "none";
+    textarea.style.background = "transparent";
+    textarea.style.outline = "none";
+    textarea.style.padding = "0";
+    textarea.style.margin = "0";
+    textarea.style.overflow = "hidden";
+    textarea.style.pointerEvents = "none";
+    textarea.readOnly = true;
+
+    // Position and transforms
+    textarea.style.left = `${layer.transform.translateX * this.scaleFactor}px`;
+    textarea.style.top = `${layer.transform.translateY * this.scaleFactor}px`;
+    textarea.style.transformOrigin = "0 0";
+    textarea.style.transform = `rotate(${layer.transform.rotation}deg) scale(${layer.transform.scaleX * this.scaleFactor}, ${layer.transform.scaleY * this.scaleFactor})`;
+  }
+
+  private rasterizeTextareas(context: CanvasRenderingContext2D): void {
+    let layers = this.project.metadata.layers;
+    for (let index = layers.length - 1; index >= 0; index--) {
+      let layer = layers[index];
+      if (!layer.basicText || layer.visible === false) {
+        continue;
+      }
+      // Rasterize text layer to canvas
+      let layerCanvas = rasterizeTextLayer(layer);
       let opacity = Math.max(0, Math.min(1, layer.opacity / 100));
       context.save();
       context.globalAlpha = opacity;
@@ -527,6 +657,24 @@ export class MainCanvasPanel extends EventEmitter {
     );
   }
 
+  public selectSelectTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.selectTool = new SelectTool(
+          this.canvasScrollContainer,
+          this.canvas,
+          () => this.project.metadata.layers,
+          (layerId: string) => this.emit("selectLayer", layerId),
+          () => this.selectTextEditTool(),
+        );
+        this.selectPreviousTool = () => this.selectSelectTool();
+      },
+      () => {
+        this.selectTool.remove();
+      },
+    );
+  }
+
   public selectCropTool(): void {
     this.toolSwitch.show(
       () => {
@@ -577,6 +725,60 @@ export class MainCanvasPanel extends EventEmitter {
     );
   }
 
+  public selectTextEditTool(): void {
+    const activeLayer = this.getActiveLayer();
+    const activeTextarea = activeLayer
+      ? this.layersToTextareas.get(activeLayer.id)
+      : undefined;
+    // Assumes an active layer is selected and is a text layer.
+
+    this.toolSwitch.show(
+      () => {
+        this.textEditTool = new TextEditTool(
+          this.canvasScrollContainer,
+          this.canvas,
+          this.outlineContainer,
+          () => this.scaleFactor,
+          activeLayer,
+          activeTextarea,
+          () => this.rerender(),
+          (
+            layer,
+            oldWidth,
+            oldHeight,
+            oldX,
+            oldY,
+            newWidth,
+            newHeight,
+            newX,
+            newY,
+          ) =>
+            this.emit(
+              "resizeTextLayer",
+              layer,
+              oldWidth,
+              oldHeight,
+              oldX,
+              oldY,
+              newWidth,
+              newHeight,
+              newX,
+              newY,
+            ),
+          (layer, oldText, newText) => {
+            this.emit("textEdit", layer, oldText, newText);
+          },
+          () => this.selectPreviousTool(),
+          (message: string) => this.emit("warning", message),
+        );
+        this.textEditTool.updateHandlePositions();
+      },
+      () => {
+        this.textEditTool.remove();
+      },
+    );
+  }
+
   public async exportAsImage(
     filename: string,
     imageType: string,
@@ -587,7 +789,8 @@ export class MainCanvasPanel extends EventEmitter {
     tempCanvas.width = this.canvas.width;
     tempCanvas.height = this.canvas.height;
     let tempContext = tempCanvas.getContext("2d");
-    this.render(tempContext);
+    this.renderCanvases(tempContext);
+    this.rasterizeTextareas(tempContext);
 
     return new Promise((resolve, reject) => {
       tempCanvas.toBlob(
@@ -612,6 +815,9 @@ export class MainCanvasPanel extends EventEmitter {
 
   public remove(): void {
     this.canvas.remove();
+    for (const textarea of this.layersToTextareas.values()) {
+      textarea.remove();
+    }
     this.removeAllListeners();
     this.resizeObserver.disconnect();
   }

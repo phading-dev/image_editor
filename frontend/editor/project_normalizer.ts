@@ -22,10 +22,27 @@ export function normalizeProjectMetadata(
     layer.transform.scaleX ??= 1;
     layer.transform.scaleY ??= 1;
     layer.transform.rotation ??= 0;
+    if (layer.shadow) {
+      layer.shadow.color ??= "#000000";
+      layer.shadow.blur ??= 0;
+      layer.shadow.offsetX ??= 0;
+      layer.shadow.offsetY ??= 0;
+    }
+    if (layer.basicText) {
+      layer.basicText.content ??= "";
+      layer.basicText.color ??= "#000000";
+      layer.basicText.fontFamily ??= "Arial";
+      layer.basicText.fontSize ??= 24;
+      layer.basicText.fontStyle ??= "normal";
+      layer.basicText.fontWeight ??= "normal";
+      layer.basicText.textAlign ??= "left";
+      layer.basicText.letterSpacing ??= 0;
+      layer.basicText.lineHeight ??= 1.2;
+    }
   }
   projectMetadata.settings ??= {};
-  projectMetadata.settings.foregroundColor ??= "#FFFFFF";
-  projectMetadata.settings.backgroundColor ??= "#000000";
+  projectMetadata.settings.foregroundColor ??= "#000000";
+  projectMetadata.settings.backgroundColor ??= "#FFFFFF";
   projectMetadata.settings.paintToolSettings ??= {};
   projectMetadata.settings.paintToolSettings.brushSize ??= 1;
   return projectMetadata;

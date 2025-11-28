@@ -4,15 +4,19 @@ import { ChatPanel } from "./chat_panel";
 import { CommandHistoryManager } from "./command_history_manager";
 import { AddImageLayerCommand } from "./commands/add_image_layer_command";
 import { AddLayerCommand } from "./commands/add_layer_command";
+import { AddTextLayerCommand } from "./commands/add_text_layer_command";
 import { CropLayerCommand } from "./commands/crop_layer_command";
 import { DeleteLayerCommand } from "./commands/delete_layer_command";
+import { EditTextCommand } from "./commands/edit_text_command";
 import { HideLayersCommand } from "./commands/hide_layers_command";
 import { LockLayersCommand } from "./commands/lock_layers_command";
 import { MoveLayersCommand } from "./commands/move_layers_command";
 import { PaintCommand } from "./commands/paint_command";
+import { RasterizeTextLayerCommand } from "./commands/rasterize_text_layer_command";
 import { RenameLayerCommand } from "./commands/rename_layer_command";
 import { ReorderLayerCommand } from "./commands/reorder_layer_command";
 import { ResizeCanvasCommand } from "./commands/resize_canvas_command";
+import { ResizeTextLayerCommand } from "./commands/resize_text_layer_command";
 import { SetLayerOpacityCommand } from "./commands/set_layer_opacity_command";
 import { ShowLayersCommand } from "./commands/show_layers_command";
 import { TransformLayerCommand } from "./commands/transform_layer_command";
@@ -236,6 +240,9 @@ export class Editor {
           parts: [{ text: message }],
         });
       })
+      .on("selectLayer", (layerId: string) => {
+        this.layersPanel.selectLayer(layerId);
+      })
       .on("paint", (context, oldImageData, newImageData) => {
         this.commandHistoryManager.pushCommand(
           new PaintCommand(
@@ -281,6 +288,40 @@ export class Editor {
             deltaY,
             this.mainCanvasPanel,
           ),
+        );
+      })
+      .on(
+        "resizeTextLayer",
+        (
+          layer,
+          oldWidth,
+          oldHeight,
+          oldX,
+          oldY,
+          newWidth,
+          newHeight,
+          newX,
+          newY,
+        ) => {
+          this.commandHistoryManager.pushCommand(
+            new ResizeTextLayerCommand(
+              layer,
+              oldWidth,
+              oldHeight,
+              oldX,
+              oldY,
+              newWidth,
+              newHeight,
+              newX,
+              newY,
+              this.mainCanvasPanel,
+            ),
+          );
+        },
+      )
+      .on("textEdit", (layer, oldText, newText) => {
+        this.commandHistoryManager.pushCommand(
+          new EditTextCommand(layer, oldText, newText, this.mainCanvasPanel),
         );
       });
     this.chatPanel
@@ -351,6 +392,48 @@ export class Editor {
               },
             },
             canvas,
+            this.layersPanel,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setAddTextLayerHandler((x?: number, y?: number) => {
+        // Default dimensions
+        const width = 600;
+        const height = 100;
+        // Default position to center if not provided
+        const finalX = x ?? (this.project.metadata.width - width) / 2;
+        const finalY = y ?? (this.project.metadata.height - height) / 2;
+        this.commandHistoryManager.pushCommand(
+          new AddTextLayerCommand(
+            this.project,
+            {
+              id: crypto.randomUUID(),
+              name: "Text Layer",
+              width: width,
+              height: height,
+              visible: true,
+              opacity: 100,
+              locked: false,
+              transform: {
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                translateX: finalX,
+                translateY: finalY,
+              },
+              basicText: {
+                content: "",
+                fontFamily: "Arial",
+                fontSize: 24,
+                fontWeight: "normal",
+                fontStyle: "normal",
+                color: this.project.metadata.settings.foregroundColor,
+                textAlign: "left",
+                lineHeight: 1.2,
+                letterSpacing: 0,
+              },
+            },
             this.layersPanel,
             this.mainCanvasPanel,
           ),
@@ -548,6 +631,27 @@ export class Editor {
           ),
         );
       })
+      .setRasterizeActiveLayerHandler(() => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to rasterize.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        if (!layer.basicText) {
+          throw new Error("Active layer is not a text layer.");
+        }
+        if (layer.locked) {
+          throw new Error("Active layer is locked and cannot be rasterized.");
+        }
+        this.commandHistoryManager.pushCommand(
+          new RasterizeTextLayerCommand(
+            this.project,
+            layer,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
       .setOpenOpacitySliderPopup(() => {
         this.openOpacitySliderPopup();
       })
@@ -575,6 +679,9 @@ export class Editor {
       })
       .setSelectMoveToolHandler(() => {
         this.mainCanvasPanel.selectMoveTool();
+      })
+      .setSelectSelectToolHandler(() => {
+        this.mainCanvasPanel.selectSelectTool();
       })
       .setMoveSelectedLayersHandler((deltaX: number, deltaY: number) => {
         const selectedLayers = this.layersPanel.selectedLayerIds;

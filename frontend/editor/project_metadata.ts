@@ -33,6 +33,87 @@ export let TRANSFORM: MessageDescriptor<Transform> = {
   }],
 };
 
+export interface Shadow {
+  color?: string,
+  blur?: number,
+  offsetX?: number,
+  offsetY?: number,
+}
+
+export let SHADOW: MessageDescriptor<Shadow> = {
+  name: 'Shadow',
+  fields: [{
+    name: 'color',
+    index: 1,
+    primitiveType: PrimitiveType.STRING,
+  }, {
+    name: 'blur',
+    index: 2,
+    primitiveType: PrimitiveType.NUMBER,
+  }, {
+    name: 'offsetX',
+    index: 3,
+    primitiveType: PrimitiveType.NUMBER,
+  }, {
+    name: 'offsetY',
+    index: 4,
+    primitiveType: PrimitiveType.NUMBER,
+  }],
+};
+
+export interface BasicText {
+  content?: string,
+  fontFamily?: string,
+  fontSize?: number,
+  fontWeight?: string,
+  fontStyle?: string,
+  color?: string,
+  textAlign?: string,
+  lineHeight?: number,
+  letterSpacing?: number,
+}
+
+export let BASIC_TEXT: MessageDescriptor<BasicText> = {
+  name: 'BasicText',
+  fields: [{
+    name: 'content',
+    index: 1,
+    primitiveType: PrimitiveType.STRING,
+  }, {
+    name: 'fontFamily',
+    index: 2,
+    primitiveType: PrimitiveType.STRING,
+  }, {
+    name: 'fontSize',
+    index: 3,
+    primitiveType: PrimitiveType.NUMBER,
+  }, {
+    name: 'fontWeight',
+    index: 4,
+    primitiveType: PrimitiveType.STRING,
+  }, {
+    name: 'fontStyle',
+    index: 5,
+    primitiveType: PrimitiveType.STRING,
+  }, {
+    name: 'color',
+    index: 6,
+    primitiveType: PrimitiveType.STRING,
+  }, {
+    name: 'textAlign',
+    index: 7,
+    primitiveType: PrimitiveType.STRING,
+  }, {
+    name: 'lineHeight',
+    index: 8,
+    primitiveType: PrimitiveType.NUMBER,
+  }, {
+    name: 'letterSpacing',
+    index: 9,
+    primitiveType: PrimitiveType.NUMBER,
+  }],
+};
+
 export interface Layer {
   id?: string,
   name?: string,
@@ -42,6 +123,8 @@ export interface Layer {
   transform?: Transform,
   width?: number,
   height?: number,
+  shadow?: Shadow,
+  basicText?: BasicText,
 }
 
 export let LAYER: MessageDescriptor<Layer> = {
@@ -78,6 +161,14 @@ export let LAYER: MessageDescriptor<Layer> = {
     name: 'height',
     index: 8,
     primitiveType: PrimitiveType.NUMBER,
+  }, {
+    name: 'shadow',
+    index: 9,
+    messageType: SHADOW,
+  }, {
+    name: 'basicText',
+    index: 10,
+    messageType: BASIC_TEXT,
   }],
 };
 

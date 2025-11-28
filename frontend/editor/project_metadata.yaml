@@ -17,6 +17,51 @@
       type: number
       index: 5
 - kind: Message
+  name: Shadow
+  fields:
+    - name: color
+      type: string
+      index: 1
+    - name: blur
+      type: number
+      index: 2
+    - name: offsetX
+      type: number
+      index: 3
+    - name: offsetY
+      type: number
+      index: 4
+- kind: Message
+  name: BasicText
+  fields:
+    - name: content
+      type: string
+      index: 1
+    - name: fontFamily
+      type: string
+      index: 2
+    - name: fontSize
+      type: number
+      index: 3
+    - name: fontWeight # normal, bold, or numeric (100-900)
+      type: string
+      index: 4
+    - name: fontStyle # normal, italic
+      type: string
+      index: 5
+    - name: color
+      type: string
+      index: 6
+    - name: textAlign # left, center, right
+      type: string
+      index: 7
+    - name: lineHeight # multiplier (e.g., 1.2)
+      type: number
+      index: 8
+    - name: letterSpacing # in pixels
+      type: number
+      index: 9
+- kind: Message
   name: Layer
   fields:
     - name: id
@@ -43,6 +88,12 @@
     - name: transform
       type: Transform
       index: 6
+    - name: shadow
+      type: Shadow
+      index: 9
+    - name: basicText
+      type: BasicText
+      index: 10
 - kind: Message
   name: PaintToolSettings
   fields:

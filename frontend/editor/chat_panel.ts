@@ -21,13 +21,13 @@ const DISPLAY_ROLES = ["user", "error", "warning", "modelResponse"];
 
 interface ChatMessage {
   role:
-  | "user"
-  | "error"
-  | "warning"
-  | "assistant"
-  | "modelResponse"
-  | "functionCall"
-  | "functionResponse";
+    | "user"
+    | "error"
+    | "warning"
+    | "assistant"
+    | "modelResponse"
+    | "functionCall"
+    | "functionResponse";
   parts: any[];
 }
 
@@ -439,6 +439,13 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setAddTextLayerHandler(
+    handler: (x?: number, y?: number) => void,
+  ): this {
+    this.registeredFunctionHandlers["addTextLayer"] = handler;
+    return this;
+  }
+
   public setLoadImageHandler(handler: () => void): this {
     this.registeredFunctionHandlers["loadImage"] = handler;
     return this;
@@ -495,6 +502,11 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setRasterizeActiveLayerHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["rasterizeActiveLayer"] = handler;
+    return this;
+  }
+
   public setOpenOpacitySliderPopup(handler: () => void): this {
     this.registeredFunctionHandlers["openOpacitySliderPopup"] = handler;
     return this;
@@ -524,6 +536,11 @@ export class ChatPanel extends EventEmitter {
 
   public setOpenColorPickerPopupHandler(handler: () => void): this {
     this.registeredFunctionHandlers["openColorPickerPopup"] = handler;
+    return this;
+  }
+
+  public setSelectSelectToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectSelectTool"] = handler;
     return this;
   }
 
@@ -618,7 +635,7 @@ export class ChatPanel extends EventEmitter {
                   "The application has layers (like Photoshop), and users can work on an active (or current) layer and manage layers.",
                   "When users ask to perform actions, use the available functions to execute them.",
                   "Shortcuts are available for: undo (Ctrl+Z), redo (Ctrl+Y or Ctrl+Shift+Z), save (Ctrl+S), open (Ctrl+O), zoom in (Ctrl+Plus), and zoom out (Ctrl+Minus).",
-                  "Popup can be closed by clicking or typing outside or pressing Escape.",
+                  "SelectTool is the default tool that can be selected by pressing ESC.",
                   "Multi-selecting layers can be done by holding down Shift while clicking on layers.",
                   "Panning the canvas can be done by holding down the Alt key and dragging the mouse.",
                   "Be concise and friendly in your responses.",
@@ -694,6 +711,26 @@ export class ChatPanel extends EventEmitter {
                   description: "Add a new layer to the project.",
                 },
                 {
+                  name: "addTextLayer",
+                  description:
+                    "Add a new text layer to the project. The layer will be created with default size (600x100) and positioned based on the provided coordinates or centered if not specified.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      x: {
+                        type: "number",
+                        description:
+                          "The x-coordinate for the text layer position. If not provided, the layer will be horizontally centered on the canvas.",
+                      },
+                      y: {
+                        type: "number",
+                        description:
+                          "The y-coordinate for the text layer position. If not provided, the layer will be vertically centered on the canvas.",
+                      },
+                    },
+                  },
+                },
+                {
                   name: "loadImage",
                   description:
                     "Launch a file picker to load an image file. A file may or may not be selected depending on the user. If an image is selected, it will be added as a new layer. If this is the first layer in the project, the canvas will be resized to match the image dimensions.",
@@ -758,6 +795,11 @@ export class ChatPanel extends EventEmitter {
                   },
                 },
                 {
+                  name: "rasterizeActiveLayer",
+                  description:
+                    "Rasterize the currently active text layer, converting it into an image layer. This action is irreversible (except via undo) and the text will no longer be editable as text.",
+                },
+                {
                   name: "openOpacitySliderPopup",
                   description:
                     "Open the opacity slider popup, if not already open, to select a new opacity which will be passed to the chat as user input in percentage (0 to 100).",
@@ -808,6 +850,11 @@ export class ChatPanel extends EventEmitter {
                   name: "openColorPickerPopup",
                   description:
                     "Open the color picker popup, if not already open, to select a color which will be passed to the chat as user input in hex format (e.g., #RRGGBB).",
+                },
+                {
+                  name: "selectSelectTool",
+                  description:
+                    "Switch to the select tool to select layers by clicking on them. Clicking on the same position will cycle through the layers at that position.",
                 },
                 {
                   name: "selectMoveTool",
@@ -1092,6 +1139,14 @@ export class ChatPanel extends EventEmitter {
               this.registeredFunctionHandlers["addNewLayer"],
             );
             return true;
+          case "addTextLayer":
+            await this.toolCall("addTextLayer", functionCall.args, () => {
+              this.registeredFunctionHandlers["addTextLayer"](
+                functionCall.args.x,
+                functionCall.args.y,
+              );
+            });
+            return true;
           case "loadImage":
             await this.toolCall(
               "loadImage",
@@ -1176,6 +1231,13 @@ export class ChatPanel extends EventEmitter {
               },
             );
             return true;
+          case "rasterizeActiveLayer":
+            await this.toolCall(
+              "rasterizeActiveLayer",
+              {},
+              this.registeredFunctionHandlers["rasterizeActiveLayer"],
+            );
+            return true;
           case "openOpacitySliderPopup":
             await this.toolCall(
               "openOpacitySliderPopup",
@@ -1220,6 +1282,13 @@ export class ChatPanel extends EventEmitter {
               "openColorPickerPopup",
               {},
               this.registeredFunctionHandlers["openColorPickerPopup"],
+            );
+            return true;
+          case "selectSelectTool":
+            await this.toolCall(
+              "selectSelectTool",
+              {},
+              this.registeredFunctionHandlers["selectSelectTool"],
             );
             return true;
           case "selectMoveTool":
