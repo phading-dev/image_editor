@@ -35,7 +35,11 @@ export class FreeTransformTool {
     private readonly outlineContainer: HTMLDivElement,
     private readonly getScaleFactor: () => number,
     private readonly getActiveLayer: () => Layer | undefined,
-    private readonly rerender: () => void,
+    private readonly getLayerCanvas: (layerId: string) => HTMLCanvasElement | undefined,
+    private readonly updateLayerCanvasStyle: (canvas: HTMLCanvasElement, layer: Layer) => void,
+    private readonly getLayerTextarea: (layerId: string) => HTMLTextAreaElement | undefined,
+    private readonly updateTextareaStyle: (textarea: HTMLTextAreaElement, layer: Layer) => void,
+    private readonly drawActiveLayerOutline: () => void,
     private readonly commit: (
       layer: Layer,
       oldTransform: Transform,
@@ -210,7 +214,17 @@ export class FreeTransformTool {
       this.handleResize(this.dragType!, deltaX, deltaY, event.shiftKey);
     }
 
-    this.rerender();
+    // Update the layer canvas transform
+    const layerCanvas = this.getLayerCanvas(this.layer.id);
+    if (layerCanvas) {
+      this.updateLayerCanvasStyle(layerCanvas, this.layer);
+    }
+    const layerTextarea = this.getLayerTextarea(this.layer.id);
+    if (layerTextarea) {
+      this.updateTextareaStyle(layerTextarea, this.layer);
+    }
+    this.drawActiveLayerOutline();
+    this.updateHandlePositions();
   };
 
   private handleMove(

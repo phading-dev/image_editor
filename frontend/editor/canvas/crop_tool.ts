@@ -122,7 +122,7 @@ export class CropTool {
         ref: overlayRef,
         style: [
           "position: absolute",
-          `border: 2px solid ${COLOR_THEME.accent3}`,
+          `border: 0.125rem solid ${COLOR_THEME.accent3}`,
           "box-sizing: border-box",
           "pointer-events: none", // Let events pass through to handles/container
         ].join("; "),

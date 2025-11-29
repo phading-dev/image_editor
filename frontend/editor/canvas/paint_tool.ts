@@ -12,7 +12,6 @@ export class PaintTool {
     private readonly projectMetadata: ProjectMetadata,
     private readonly getActiveLayer: () => Layer,
     private readonly getActiveLayerContext: () => CanvasRenderingContext2D,
-    private readonly rerender: () => void,
     private readonly commit: (
       context: CanvasRenderingContext2D,
       oldImageData: ImageData,
@@ -39,6 +38,10 @@ export class PaintTool {
     }
     if (this.layer.locked) {
       this.warning("Cannot paint on a locked layer.");
+      return;
+    }
+    if (this.layer.basicText) {
+      this.warning("Cannot paint on a text layer. Please rasterize it first.");
       return;
     }
 
@@ -86,7 +89,6 @@ export class PaintTool {
     let layerPoint = this.eventToLayerPoint(point, this.layer);
     this.drawStrokeSegment(layerPoint, this.lastPaintPoint);
     this.lastPaintPoint = layerPoint;
-    this.rerender();
   }
 
   private eventToLayerPoint(

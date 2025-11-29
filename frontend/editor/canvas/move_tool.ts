@@ -10,7 +10,11 @@ export class MoveTool {
     private readonly canvasContainer: HTMLElement,
     private readonly canvas: HTMLCanvasElement,
     private readonly getSelectedLayers: () => Layer[],
-    private readonly rerender: () => void,
+    private readonly getLayerCanvas: (layerId: string) => HTMLCanvasElement | undefined,
+    private readonly updateLayerCanvasStyle: (canvas: HTMLCanvasElement, layer: Layer) => void,
+    private readonly getLayerTextarea: (layerId: string) => HTMLTextAreaElement | undefined,
+    private readonly updateTextareaStyle: (textarea: HTMLTextAreaElement, layer: Layer) => void,
+    private readonly drawActiveLayerOutline: () => void,
     private readonly commit: (
       layers: Layer[],
       deltaX: number,
@@ -90,7 +94,19 @@ export class MoveTool {
       layer.transform.translateX = initial.x + deltaX;
       layer.transform.translateY = initial.y + deltaY;
     });
-    this.rerender();
+
+    // Update layer visuals directly without rerendering everything
+    this.layers.forEach((layer) => {
+      const layerCanvas = this.getLayerCanvas(layer.id);
+      if (layerCanvas) {
+        this.updateLayerCanvasStyle(layerCanvas, layer);
+      }
+      const layerTextarea = this.getLayerTextarea(layer.id);
+      if (layerTextarea) {
+        this.updateTextareaStyle(layerTextarea, layer);
+      }
+    });
+    this.drawActiveLayerOutline();
   };
 
   private handlePointerUpOrCancel = (event: PointerEvent): void => {

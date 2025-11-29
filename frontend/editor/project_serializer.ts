@@ -46,11 +46,20 @@ export async function loadFromZip(zipBlob: Blob): Promise<Project> {
     }
   });
 
+  const layersToTextareas = new Map<string, HTMLTextAreaElement>();
+  for (let layer of metadata.layers) {
+    if (layer.basicText) {
+      const textarea = document.createElement("textarea");
+      layersToTextareas.set(layer.id, textarea);
+    }
+  }
+
   await Promise.all(loadPromises);
 
   return {
     metadata,
     layersToCanvas,
+    layersToTextareas,
   };
 }
 

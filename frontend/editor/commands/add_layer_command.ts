@@ -5,13 +5,18 @@ import { Project } from "../project";
 import { Layer } from "../project_metadata";
 
 export class AddLayerCommand implements Command {
+  private newCanvas: HTMLCanvasElement;
+
   public constructor(
     private project: Project,
     private newLayer: Layer,
-    private newCanvas: HTMLCanvasElement,
     private layersPanel: LayersPanel,
     private mainCanvasPanel: MainCanvasPanel,
-  ) {}
+  ) {
+    this.newCanvas = document.createElement("canvas");
+    this.newCanvas.width = this.project.metadata.width;
+    this.newCanvas.height = this.project.metadata.height;
+  }
 
   public do(): void {
     this.project.metadata.layers.unshift(this.newLayer);

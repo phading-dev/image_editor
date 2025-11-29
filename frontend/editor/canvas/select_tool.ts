@@ -39,9 +39,9 @@ export class SelectTool {
     const isSamePosition =
       this.lastClickPos &&
       Math.abs(clickPos.x - this.lastClickPos.x) <
-        SelectTool.SELECT_CLICK_DISTANCE &&
+      SelectTool.SELECT_CLICK_DISTANCE &&
       Math.abs(clickPos.y - this.lastClickPos.y) <
-        SelectTool.SELECT_CLICK_DISTANCE;
+      SelectTool.SELECT_CLICK_DISTANCE;
 
     if (isSamePosition && this.layersAtLastClick.length > 1) {
       // Cycle to next layer at this position
@@ -65,7 +65,7 @@ export class SelectTool {
 
     // Find first text layer at this position (Top-most)
     for (const layer of layers) {
-      if (layer.basicText) {
+      if (layer.basicText && !layer.locked) {
         // Ensure it's selected (in case we cycled away)
         this.onSelectLayer(layer.id);
         this.onEditTextLayer(layer.id);

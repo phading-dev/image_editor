@@ -544,6 +544,11 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setSelectTextEditToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectTextEditTool"] = handler;
+    return this;
+  }
+
   public setSelectMoveToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectMoveTool"] = handler;
     return this;
@@ -1015,6 +1020,11 @@ export class ChatPanel extends EventEmitter {
                     },
                   },
                 },
+                {
+                  name: "selectTextEditTool",
+                  description:
+                    "Switch to the text edit tool to edit the text of the currently active text layer as well as resizing the text box by adjusting width and height instead of applying scale. If the active layer is not a text layer, this will do nothing. This tool is committed and exited, when pressing ESC or clicking outside of the text box, meaning selecting another layer will exit the tool.",
+                },
               ],
             },
           ]),
@@ -1369,6 +1379,13 @@ export class ChatPanel extends EventEmitter {
                 functionCall.args?.deltaX,
                 functionCall.args?.deltaY,
               ),
+            );
+            return true;
+          case "selectTextEditTool":
+            await this.toolCall(
+              "selectTextEditTool",
+              {},
+              this.registeredFunctionHandlers["selectTextEditTool"],
             );
             return true;
           default:

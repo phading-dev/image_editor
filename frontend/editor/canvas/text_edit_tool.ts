@@ -23,6 +23,7 @@ export class TextEditTool {
   };
   private initialPointerPos?: { x: number; y: number };
   private handles: Map<HandleType, HTMLDivElement> = new Map();
+  private borderElement: HTMLDivElement;
   private oldTextContent: string = "";
 
   public constructor(
@@ -32,7 +33,11 @@ export class TextEditTool {
     private readonly getScaleFactor: () => number,
     private readonly layer: Layer,
     private readonly textarea: HTMLTextAreaElement,
-    public readonly rerender: () => void,
+    private readonly updateTextareaStyle: (
+      textarea: HTMLTextAreaElement,
+      layer: Layer,
+    ) => void,
+    private readonly drawActiveLayerOutline: () => void,
     private readonly onResize: (
       layer: Layer,
       oldWidth: number,
@@ -53,12 +58,11 @@ export class TextEditTool {
     private readonly warning: (message: string) => void,
     private readonly document: Document = globalThis.document,
   ) {
-    this.canvasScrollContainer.style.cursor = "text";
     this.oldTextContent = this.textarea.value;
     this.textarea.readOnly = false;
     this.textarea.style.pointerEvents = "auto";
     this.textarea.focus();
-    this.createHandles();
+    this.createBorderAndHandles();
     this.document.addEventListener("pointerdown", this.handlePointerDown);
     this.canvasScrollContainer.addEventListener(
       "pointermove",
@@ -76,9 +80,20 @@ export class TextEditTool {
       "pointercancel",
       this.handlePointerUpOrCancel,
     );
+    this.updateBorderAndHandlePositionsAndEditingStyle();
   }
 
-  private createHandles(): void {
+  private createBorderAndHandles(): void {
+    this.borderElement = E.div({
+      style: [
+        "position: absolute",
+        `border: 0.125rem solid ${COLOR_THEME.accent3}`,
+        "pointer-events: none",
+        "box-sizing: border-box",
+      ].join("; "),
+    });
+    this.outlineContainer.appendChild(this.borderElement);
+
     const handleTypes: HandleType[] = [
       "top-left",
       "top",
@@ -89,7 +104,6 @@ export class TextEditTool {
       "bottom-left",
       "left",
     ];
-
     handleTypes.forEach((type) => {
       const handle = E.div({
         style: [
@@ -104,21 +118,24 @@ export class TextEditTool {
         ].join("; "),
       });
       handle.dataset.handleType = type;
-
       // Add pointer down listener to handle for resize
       handle.addEventListener("pointerdown", (e) => {
         this.handleHandlePointerDown(e, type);
       });
-
       this.handles.set(type, handle);
       this.outlineContainer.appendChild(handle);
     });
   }
 
-  public updateHandlePositions(): void {
+  public updateBorderAndHandlePositionsAndEditingStyle(): void {
     const scaleFactor = this.getScaleFactor();
     const layerWidth = this.layer.width * scaleFactor;
     const layerHeight = this.layer.height * scaleFactor;
+
+    this.borderElement.style.left = "0px";
+    this.borderElement.style.top = "0px";
+    this.borderElement.style.width = `${layerWidth}px`;
+    this.borderElement.style.height = `${layerHeight}px`;
 
     // Position corner and edge handles
     const handlePositions: Record<string, { x: number; y: number }> = {
@@ -139,6 +156,20 @@ export class TextEditTool {
         handle.style.top = `${y}px`;
       }
     });
+
+    // Update special editing textarea style
+    // Apply position
+    this.textarea.style.left = `${this.layer.transform.translateX * scaleFactor}px`;
+    this.textarea.style.top = `${this.layer.transform.translateY * scaleFactor}px`;
+    // Apply dimensions
+    this.textarea.style.width = `${this.layer.width}px`;
+    this.textarea.style.height = `${this.layer.height}px`;
+    // Apply transform (ignore layer rotation/scale, only use zoom)
+    this.textarea.style.transformOrigin = "0 0";
+    this.textarea.style.transform = `rotate(0deg) scale(${scaleFactor}, ${scaleFactor})`;
+    // Ensure editable
+    this.textarea.readOnly = false;
+    this.textarea.style.pointerEvents = "auto";
   }
 
   private getCursorForHandle(type: HandleType): string {
@@ -212,7 +243,8 @@ export class TextEditTool {
     const deltaY = currentPoint.y - this.initialPointerPos.y;
 
     this.handleResize(this.dragType!, deltaX, deltaY);
-    this.rerender();
+    this.updateBorderAndHandlePositionsAndEditingStyle();
+    this.drawActiveLayerOutline();
   };
 
   private handleResize(
@@ -303,12 +335,10 @@ export class TextEditTool {
 
   public remove(): void {
     this.commitText();
-    this.canvasScrollContainer.style.cursor = "";
-    this.textarea.readOnly = true;
-    this.textarea.style.pointerEvents = "none";
     this.handles.forEach((handle) => {
       handle.remove();
     });
+    this.borderElement?.remove();
     this.document.removeEventListener("pointerdown", this.handlePointerDown);
     this.canvasScrollContainer.removeEventListener(
       "pointermove",
@@ -326,5 +356,6 @@ export class TextEditTool {
       "pointercancel",
       this.handlePointerUpOrCancel,
     );
+    this.updateTextareaStyle(this.textarea, this.layer);
   }
 }

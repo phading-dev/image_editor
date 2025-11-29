@@ -32,6 +32,7 @@ export class EditorFactory {
     let project: Project = {
       metadata: normalizeProjectMetadata({}),
       layersToCanvas: new Map<string, HTMLCanvasElement>(),
+      layersToTextareas: new Map<string, HTMLTextAreaElement>(),
     };
     this.editor?.remove();
     this.editor = this.createEditor(

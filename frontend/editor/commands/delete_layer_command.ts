@@ -7,6 +7,7 @@ import { Layer } from "../project_metadata";
 export class DeleteLayerCommand implements Command {
   private layerIndex: number;
   private canvasToDelete: HTMLCanvasElement;
+  private textareaToDelete: HTMLTextAreaElement;
 
   public constructor(
     private project: Project,
@@ -20,18 +21,31 @@ export class DeleteLayerCommand implements Command {
     this.canvasToDelete = this.project.layersToCanvas.get(
       this.layerToDelete.id,
     );
+    this.textareaToDelete = this.project.layersToTextareas.get(
+      this.layerToDelete.id,
+    );
   }
 
   public do(): void {
     this.project.metadata.layers.splice(this.layerIndex, 1);
-    this.project.layersToCanvas.delete(this.layerToDelete.id);
+    if (this.canvasToDelete) {
+      this.project.layersToCanvas.delete(this.layerToDelete.id);
+    }
+    if (this.textareaToDelete) {
+      this.project.layersToTextareas.delete(this.layerToDelete.id);
+    }
     this.mainCanvasPanel.rerender();
     this.layersPanel.deleteLayerRow(this.layerToDelete.id);
   }
 
   public undo(): void {
     this.project.metadata.layers.splice(this.layerIndex, 0, this.layerToDelete);
-    this.project.layersToCanvas.set(this.layerToDelete.id, this.canvasToDelete);
+    if (this.canvasToDelete) {
+      this.project.layersToCanvas.set(this.layerToDelete.id, this.canvasToDelete);
+    }
+    if (this.textareaToDelete) {
+      this.project.layersToTextareas.set(this.layerToDelete.id, this.textareaToDelete);
+    }
     this.mainCanvasPanel.rerender();
     this.layersPanel.addLayerRow(this.layerToDelete);
     if (this.layerIndex >= this.project.metadata.layers.length - 1) {

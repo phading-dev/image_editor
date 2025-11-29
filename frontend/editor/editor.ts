@@ -190,7 +190,7 @@ export class Editor {
         );
       })
       .on("layerSelectionChanged", () => {
-        this.mainCanvasPanel.rerender();
+        this.mainCanvasPanel.drawActiveLayerOutline();
       })
       .on("toggleLayerVisibility", (layerId: string) => {
         const layer = this.project.metadata.layers.find(
@@ -369,9 +369,6 @@ export class Editor {
         this.commandHistoryManager.redo();
       })
       .setAddNewLayerHandler(() => {
-        let canvas = document.createElement("canvas");
-        canvas.width = this.project.metadata.width;
-        canvas.height = this.project.metadata.height;
         this.commandHistoryManager.pushCommand(
           new AddLayerCommand(
             this.project,
@@ -391,7 +388,6 @@ export class Editor {
                 translateY: 0,
               },
             },
-            canvas,
             this.layersPanel,
             this.mainCanvasPanel,
           ),
@@ -842,7 +838,22 @@ export class Editor {
             ),
           );
         },
-      );
+      )
+      .setSelectTextEditToolHandler(() => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to edit text.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        if (!layer.basicText) {
+          throw new Error("Active layer is not a text layer.");
+        }
+        if (layer.locked) {
+          throw new Error("Active layer is locked and cannot be edited.");
+        }
+        this.mainCanvasPanel.selectTextEditTool();
+      });
     this.mainCanvasPanel.rerender();
     this.chatPanel.sendAssistantMessage("Hi, can you introduce yourself?");
   }

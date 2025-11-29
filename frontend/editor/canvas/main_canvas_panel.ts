@@ -109,7 +109,6 @@ export class MainCanvasPanel extends EventEmitter {
   private toolSwitch = new TabsSwitcher();
   private selectPreviousTool: () => void;
   private resizeObserver: ResizeObserver;
-  private layersToTextareas = new Map<string, HTMLTextAreaElement>();
 
   public constructor(
     private document: Document,
@@ -174,6 +173,7 @@ export class MainCanvasPanel extends EventEmitter {
                 "width: " + this.project.metadata.width + "px",
                 "height: " + this.project.metadata.height + "px",
                 "position: relative",
+                "overflow: hidden",
               ].join("; "),
             },
             E.canvas({
@@ -359,12 +359,10 @@ export class MainCanvasPanel extends EventEmitter {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     // Draw checkerboard pattern to indicate transparency
     this.drawCheckerboard();
-    this.renderCanvases(this.context);
-    this.renderTextareas();
-
+    this.renderLayers();
     this.drawActiveLayerOutline();
     this.freeTransformTool?.updateHandlePositions();
-    this.textEditTool?.updateHandlePositions();
+    this.textEditTool?.updateBorderAndHandlePositionsAndEditingStyle();
     this.cropTool?.updateOverlayAndHandles();
     this.resizeCanvasTool?.updateOverlayAndHandles();
   }
@@ -385,56 +383,59 @@ export class MainCanvasPanel extends EventEmitter {
     }
   }
 
-  private renderCanvases(context: CanvasRenderingContext2D): void {
+  private renderLayers(): void {
+    // Clear all layer elements from canvasContainer (keep only the main canvas)
+    const children = Array.from(this.canvasContainer.children);
+    for (const child of children) {
+      if (child !== this.canvas) {
+        child.remove();
+      }
+    }
+
+    // Add all layers as DOM elements in reverse order (bottom to top)
+    // Since we append in reverse order, the first layer (index 0, top) will be appended last and appear on top
     let layers = this.project.metadata.layers;
     for (let index = layers.length - 1; index >= 0; index--) {
       let layer = layers[index];
-      if (layer.basicText || layer.visible === false) {
+      if (layer.visible === false) {
         continue;
       }
-      let layerCanvas = this.project.layersToCanvas.get(layer.id);
-      let opacity = Math.max(0, Math.min(1, layer.opacity / 100));
-      context.save();
-      context.globalAlpha = opacity;
-      context.translate(layer.transform.translateX, layer.transform.translateY);
-      // Rotate around the top-left corner to stay consistent with translation.
-      context.rotate((layer.transform.rotation * Math.PI) / 180);
-      context.scale(layer.transform.scaleX, layer.transform.scaleY);
-      context.drawImage(layerCanvas, 0, 0);
-      context.restore();
+
+      if (layer.basicText) {
+        // Render text layer as textarea
+        let textarea = this.project.layersToTextareas.get(layer.id);
+        textarea.value = layer.basicText.content;
+        this.canvasContainer.appendChild(textarea);
+        this.updateTextareaStyle(textarea, layer);
+      } else {
+        // Render canvas layer
+        let layerCanvas = this.project.layersToCanvas.get(layer.id);
+        this.canvasContainer.appendChild(layerCanvas);
+        this.updateLayerCanvasStyle(layerCanvas, layer);
+      }
     }
   }
 
-  private renderTextareas(): void {
-    const visitedLayerIds = new Set<string>();
-    let layers = this.project.metadata.layers;
-    for (let index = layers.length - 1; index >= 0; index--) {
-      let layer = layers[index];
-      if (!layer.basicText || layer.visible === false) {
-        continue;
-      }
-      visitedLayerIds.add(layer.id);
-      let textarea = this.layersToTextareas.get(layer.id);
-      if (!textarea) {
-        textarea = document.createElement("textarea");
-        this.layersToTextareas.set(layer.id, textarea);
-        this.canvasContainer.appendChild(textarea);
-      }
-      textarea.value = layer.basicText.content;
-      this.updateTextareaStyle(textarea, layer);
-    }
-    for (const [layerId, textarea] of this.layersToTextareas) {
-      if (!visitedLayerIds.has(layerId)) {
-        textarea.remove();
-        this.layersToTextareas.delete(layerId);
-      }
-    }
+  private updateLayerCanvasStyle(
+    canvas: HTMLCanvasElement,
+    layer: Layer,
+  ): void {
+    // Position and styling
+    canvas.style.position = "absolute";
+    canvas.style.left = `${layer.transform.translateX * this.scaleFactor}px`;
+    canvas.style.top = `${layer.transform.translateY * this.scaleFactor}px`;
+    canvas.style.transformOrigin = "0 0";
+    canvas.style.transform = `rotate(${layer.transform.rotation}deg) scale(${layer.transform.scaleX * this.scaleFactor}, ${layer.transform.scaleY * this.scaleFactor})`;
+    canvas.style.opacity = `${layer.opacity / 100}`;
+    canvas.style.pointerEvents = "none";
   }
 
   private updateTextareaStyle(
     textarea: HTMLTextAreaElement,
     layer: Layer,
   ): void {
+    // Blur the textarea to remove focus and text selection.
+    textarea.blur();
     const basicText = layer.basicText;
     textarea.style.fontFamily = basicText.fontFamily;
     textarea.style.fontSize = `${basicText.fontSize}px`;
@@ -470,28 +471,7 @@ export class MainCanvasPanel extends EventEmitter {
     textarea.style.transform = `rotate(${layer.transform.rotation}deg) scale(${layer.transform.scaleX * this.scaleFactor}, ${layer.transform.scaleY * this.scaleFactor})`;
   }
 
-  private rasterizeTextareas(context: CanvasRenderingContext2D): void {
-    let layers = this.project.metadata.layers;
-    for (let index = layers.length - 1; index >= 0; index--) {
-      let layer = layers[index];
-      if (!layer.basicText || layer.visible === false) {
-        continue;
-      }
-      // Rasterize text layer to canvas
-      let layerCanvas = rasterizeTextLayer(layer);
-      let opacity = Math.max(0, Math.min(1, layer.opacity / 100));
-      context.save();
-      context.globalAlpha = opacity;
-      context.translate(layer.transform.translateX, layer.transform.translateY);
-      // Rotate around the top-left corner to stay consistent with translation.
-      context.rotate((layer.transform.rotation * Math.PI) / 180);
-      context.scale(layer.transform.scaleX, layer.transform.scaleY);
-      context.drawImage(layerCanvas, 0, 0);
-      context.restore();
-    }
-  }
-
-  private drawActiveLayerOutline(): void {
+  public drawActiveLayerOutline(): void {
     const activeLayer = this.getActiveLayer();
     if (!activeLayer) {
       this.outlineContainer.style.display = "none";
@@ -602,7 +582,6 @@ export class MainCanvasPanel extends EventEmitter {
           this.project.metadata,
           () => this.getActiveLayer(),
           () => this.getActiveLayerContext(),
-          () => this.rerender(),
           (context, oldImageData, newImageData) =>
             this.emit("paint", context, oldImageData, newImageData),
           (message: string) => this.emit("warning", message),
@@ -611,6 +590,7 @@ export class MainCanvasPanel extends EventEmitter {
       },
       () => {
         this.paintTool.remove();
+        this.paintTool = undefined;
       },
     );
   }
@@ -622,14 +602,19 @@ export class MainCanvasPanel extends EventEmitter {
           this.canvasScrollContainer,
           this.canvas,
           () => this.getSelectedLayers(),
-          () => this.rerender(),
-          (layers, deltaX, deltaY) => this.emit("move", layers, deltaX, deltaY),
+          (layerId) => this.project.layersToCanvas.get(layerId),
+          (canvas, layer) => this.updateLayerCanvasStyle(canvas, layer),
+          (layerId) => this.project.layersToTextareas.get(layerId),
+          (textarea, layer) => this.updateTextareaStyle(textarea, layer),
+          () => this.drawActiveLayerOutline(),
+          (layers: Layer[], deltaX: number, deltaY: number) => this.emit("move", layers, deltaX, deltaY),
           (message: string) => this.emit("warning", message),
         );
         this.selectPreviousTool = () => this.selectMoveTool();
       },
       () => {
         this.moveTool.remove();
+        this.moveTool = undefined;
       },
     );
   }
@@ -643,7 +628,11 @@ export class MainCanvasPanel extends EventEmitter {
           this.outlineContainer,
           () => this.scaleFactor,
           () => this.getActiveLayer(),
-          () => this.rerender(),
+          (layerId) => this.project.layersToCanvas.get(layerId),
+          (canvas, layer) => this.updateLayerCanvasStyle(canvas, layer),
+          (layerId) => this.project.layersToTextareas.get(layerId),
+          (textarea, layer) => this.updateTextareaStyle(textarea, layer),
+          () => this.drawActiveLayerOutline(),
           (layer, oldTransform, newTransform) =>
             this.emit("transform", layer, oldTransform, newTransform),
           (message: string) => this.emit("warning", message),
@@ -653,6 +642,7 @@ export class MainCanvasPanel extends EventEmitter {
       },
       () => {
         this.freeTransformTool.remove();
+        this.freeTransformTool = undefined;
       },
     );
   }
@@ -671,6 +661,7 @@ export class MainCanvasPanel extends EventEmitter {
       },
       () => {
         this.selectTool.remove();
+        this.selectTool = undefined;
       },
     );
   }
@@ -691,6 +682,7 @@ export class MainCanvasPanel extends EventEmitter {
       },
       () => {
         this.cropTool.remove();
+        this.cropTool = undefined;
       },
     );
   }
@@ -710,6 +702,7 @@ export class MainCanvasPanel extends EventEmitter {
       },
       () => {
         this.resizeCanvasTool.remove();
+        this.resizeCanvasTool = undefined;
       },
     );
   }
@@ -721,6 +714,7 @@ export class MainCanvasPanel extends EventEmitter {
       },
       () => {
         this.panTool.remove();
+        this.panTool = undefined;
       },
     );
   }
@@ -728,7 +722,7 @@ export class MainCanvasPanel extends EventEmitter {
   public selectTextEditTool(): void {
     const activeLayer = this.getActiveLayer();
     const activeTextarea = activeLayer
-      ? this.layersToTextareas.get(activeLayer.id)
+      ? this.project.layersToTextareas.get(activeLayer.id)
       : undefined;
     // Assumes an active layer is selected and is a text layer.
 
@@ -741,7 +735,8 @@ export class MainCanvasPanel extends EventEmitter {
           () => this.scaleFactor,
           activeLayer,
           activeTextarea,
-          () => this.rerender(),
+          (textarea, layer) => this.updateTextareaStyle(textarea, layer),
+          () => this.drawActiveLayerOutline(),
           (
             layer,
             oldWidth,
@@ -771,10 +766,12 @@ export class MainCanvasPanel extends EventEmitter {
           () => this.selectPreviousTool(),
           (message: string) => this.emit("warning", message),
         );
-        this.textEditTool.updateHandlePositions();
       },
       () => {
-        this.textEditTool.remove();
+        let tool = this.textEditTool;
+        this.textEditTool = undefined;
+        // remove() may trigger rerender. By setting textEditTool to undefined first, we can avoid rendering special textarea editing style.
+        tool.remove();
       },
     );
   }
@@ -789,8 +786,7 @@ export class MainCanvasPanel extends EventEmitter {
     tempCanvas.width = this.canvas.width;
     tempCanvas.height = this.canvas.height;
     let tempContext = tempCanvas.getContext("2d");
-    this.renderCanvases(tempContext);
-    this.rasterizeTextareas(tempContext);
+    this.rasterizeLayers(tempContext);
 
     return new Promise((resolve, reject) => {
       tempCanvas.toBlob(
@@ -813,9 +809,31 @@ export class MainCanvasPanel extends EventEmitter {
     });
   }
 
+  private rasterizeLayers(context: CanvasRenderingContext2D): void {
+    let layers = this.project.metadata.layers;
+    for (let index = layers.length - 1; index >= 0; index--) {
+      let layer = layers[index];
+      if (layer.visible === false) {
+        continue;
+      }
+      let layerCanvas = layer.basicText
+        ? rasterizeTextLayer(layer)
+        : this.project.layersToCanvas.get(layer.id);
+      let opacity = Math.max(0, Math.min(1, layer.opacity / 100));
+      context.save();
+      context.globalAlpha = opacity;
+      context.translate(layer.transform.translateX, layer.transform.translateY);
+      // Rotate around the top-left corner to stay consistent with translation.
+      context.rotate((layer.transform.rotation * Math.PI) / 180);
+      context.scale(layer.transform.scaleX, layer.transform.scaleY);
+      context.drawImage(layerCanvas, 0, 0);
+      context.restore();
+    }
+  }
+
   public remove(): void {
     this.canvas.remove();
-    for (const textarea of this.layersToTextareas.values()) {
+    for (const textarea of this.project.layersToTextareas.values()) {
       textarea.remove();
     }
     this.removeAllListeners();
