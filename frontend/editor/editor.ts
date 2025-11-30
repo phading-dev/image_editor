@@ -18,11 +18,11 @@ import { ReorderLayerCommand } from "./commands/reorder_layer_command";
 import { ResizeCanvasCommand } from "./commands/resize_canvas_command";
 import { ResizeTextLayerCommand } from "./commands/resize_text_layer_command";
 import { SetLayerOpacityCommand } from "./commands/set_layer_opacity_command";
-import { UpdateLayerShadowCommand } from "./commands/update_layer_shadow_command";
-import { UpdateBasicTextCommand } from "./commands/update_basic_text_command";
 import { ShowLayersCommand } from "./commands/show_layers_command";
 import { TransformLayerCommand } from "./commands/transform_layer_command";
 import { UnlockLayersCommand } from "./commands/unlock_layers_command";
+import { UpdateBasicTextCommand } from "./commands/update_basic_text_command";
+import { UpdateLayerShadowCommand } from "./commands/update_layer_shadow_command";
 import { LayersPanel } from "./layers_panel";
 import { ColorPickerPopup } from "./popup/color_picker_popup";
 import { SliderPopup } from "./popup/slider_popup";
@@ -193,6 +193,10 @@ export class Editor {
       })
       .on("layerSelectionChanged", () => {
         this.mainCanvasPanel.drawActiveLayerOutline();
+        this.chatPanel.appendMessage({
+          role: "system",
+          parts: [{ text: "Layer selection changed" }],
+        });
       })
       .on("toggleLayerVisibility", (layerId: string) => {
         const layer = this.project.metadata.layers.find(
@@ -244,6 +248,10 @@ export class Editor {
       })
       .on("selectLayer", (layerId: string) => {
         this.layersPanel.selectLayer(layerId);
+        this.chatPanel.appendMessage({
+          role: "system",
+          parts: [{ text: "Layer selection changed" }],
+        });
       })
       .on("paint", (context, oldImageData, newImageData) => {
         this.commandHistoryManager.pushCommand(
@@ -372,9 +380,17 @@ export class Editor {
       )
       .setUndoHandler(() => {
         this.commandHistoryManager.undo();
+        this.chatPanel.appendMessage({
+          role: "system",
+          parts: [{ text: "Command undone." }],
+        });
       })
       .setRedoHandler(() => {
         this.commandHistoryManager.redo();
+        this.chatPanel.appendMessage({
+          role: "system",
+          parts: [{ text: "Command redone." }],
+        });
       })
       .setAddNewLayerHandler(() => {
         this.commandHistoryManager.pushCommand(
@@ -876,9 +892,7 @@ export class Editor {
             (layer) => layer.id === this.layersPanel.activeLayerId,
           );
           if (layer.locked) {
-            throw new Error(
-              "Active layer is locked and cannot update shadow.",
-            );
+            throw new Error("Active layer is locked and cannot update shadow.");
           }
           const oldShadow = layer.shadow;
           const defaultShadow = {
@@ -913,9 +927,7 @@ export class Editor {
           (layer) => layer.id === this.layersPanel.activeLayerId,
         );
         if (layer.locked) {
-          throw new Error(
-            "Active layer is locked and cannot delete shadow.",
-          );
+          throw new Error("Active layer is locked and cannot delete shadow.");
         }
         if (!layer.shadow) {
           throw new Error("Active layer has no shadow to delete.");
@@ -952,9 +964,7 @@ export class Editor {
             throw new Error("Active layer is not a text layer.");
           }
           if (layer.locked) {
-            throw new Error(
-              "Active layer is locked and cannot update text.",
-            );
+            throw new Error("Active layer is locked and cannot update text.");
           }
           const oldBasicText = { ...layer.basicText };
           const newBasicText = {
@@ -966,7 +976,8 @@ export class Editor {
             color: basicText.color ?? oldBasicText.color,
             textAlign: basicText.textAlign ?? oldBasicText.textAlign,
             lineHeight: basicText.lineHeight ?? oldBasicText.lineHeight,
-            letterSpacing: basicText.letterSpacing ?? oldBasicText.letterSpacing,
+            letterSpacing:
+              basicText.letterSpacing ?? oldBasicText.letterSpacing,
           };
           this.commandHistoryManager.pushCommand(
             new UpdateBasicTextCommand(

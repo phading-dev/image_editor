@@ -12,6 +12,7 @@ import { WebServiceClient } from "@selfage/web_service_client/client";
 const CHAT_CONTEXT_ROLES = [
   "user",
   "assistant",
+  "system",
   "modelResponse",
   "functionCall",
   "functionResponse",
@@ -25,6 +26,7 @@ interface ChatMessage {
   | "error"
   | "warning"
   | "assistant"
+  | "system"
   | "modelResponse"
   | "functionCall"
   | "functionResponse";
@@ -293,6 +295,8 @@ export class ChatPanel extends EventEmitter {
     if (CHAT_CONTEXT_ROLES.includes(message.role)) {
       let role: string = message.role;
       if (role === "assistant") {
+        role = "user";
+      } else if (role === "system") {
         role = "user";
       } else if (role === "modelResponse") {
         role = "model";
