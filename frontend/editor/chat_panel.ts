@@ -460,6 +460,11 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setDuplicateActiveLayerHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["duplicateActiveLayer"] = handler;
+    return this;
+  }
+
   public setGetActiveLayerInfoHandler(handler: () => string): this {
     this.registeredFunctionHandlers["getActiveLayerInfo"] = handler;
     return this;
@@ -781,6 +786,10 @@ export class ChatPanel extends EventEmitter {
                 {
                   name: "deleteActiveLayer",
                   description: "Delete the currently active layer.",
+                },
+                {
+                  name: "duplicateActiveLayer",
+                  description: "Duplicate the currently active layer. The duplicated layer will be placed at the top of the layer stack with a copy of all properties and content.",
                 },
                 {
                   name: "getActiveLayerInfo",
@@ -1284,6 +1293,13 @@ export class ChatPanel extends EventEmitter {
               "deleteActiveLayer",
               {},
               this.registeredFunctionHandlers["deleteActiveLayer"],
+            );
+            return true;
+          case "duplicateActiveLayer":
+            await this.toolCall(
+              "duplicateActiveLayer",
+              {},
+              this.registeredFunctionHandlers["duplicateActiveLayer"],
             );
             return true;
           case "getActiveLayerInfo":

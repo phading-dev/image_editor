@@ -85,14 +85,27 @@ export class SelectTool {
         continue;
       }
 
-      // Simple bounding box hit test
+      // Transform the click point into the layer's local coordinate space
       const transform = layer.transform;
-      const left = transform.translateX;
-      const top = transform.translateY;
-      const right = left + layer.width * transform.scaleX;
-      const bottom = top + layer.height * transform.scaleY;
 
-      if (x >= left && x <= right && y >= top && y <= bottom) {
+      // Step 1: Translate to layer origin
+      let localX = x - transform.translateX;
+      let localY = y - transform.translateY;
+
+      // Step 2: Apply inverse rotation (rotate by -angle)
+      const angleRad = (-transform.rotation * Math.PI) / 180;
+      const cosAngle = Math.cos(angleRad);
+      const sinAngle = Math.sin(angleRad);
+      const rotatedX = localX * cosAngle - localY * sinAngle;
+      const rotatedY = localX * sinAngle + localY * cosAngle;
+
+      // Step 3: Apply inverse scale
+      const scaledX = rotatedX / transform.scaleX;
+      const scaledY = rotatedY / transform.scaleY;
+
+      // Step 4: Check if point is within layer bounds (0, 0, width, height)
+      if (scaledX >= 0 && scaledX <= layer.width &&
+        scaledY >= 0 && scaledY <= layer.height) {
         result.push(layer);
       }
     }

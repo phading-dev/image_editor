@@ -7,6 +7,7 @@ import { AddLayerCommand } from "./commands/add_layer_command";
 import { AddTextLayerCommand } from "./commands/add_text_layer_command";
 import { CropLayerCommand } from "./commands/crop_layer_command";
 import { DeleteLayerCommand } from "./commands/delete_layer_command";
+import { DuplicateLayerCommand } from "./commands/duplicate_layer_command";
 import { EditTextCommand } from "./commands/edit_text_command";
 import { HideLayersCommand } from "./commands/hide_layers_command";
 import { LockLayersCommand } from "./commands/lock_layers_command";
@@ -528,6 +529,22 @@ export class Editor {
         }
         this.commandHistoryManager.pushCommand(
           new DeleteLayerCommand(
+            this.project,
+            layer,
+            this.layersPanel,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setDuplicateActiveLayerHandler(() => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to duplicate.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        this.commandHistoryManager.pushCommand(
+          new DuplicateLayerCommand(
             this.project,
             layer,
             this.layersPanel,
