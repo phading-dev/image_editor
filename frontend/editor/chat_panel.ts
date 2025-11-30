@@ -21,13 +21,13 @@ const DISPLAY_ROLES = ["user", "error", "warning", "modelResponse"];
 
 interface ChatMessage {
   role:
-    | "user"
-    | "error"
-    | "warning"
-    | "assistant"
-    | "modelResponse"
-    | "functionCall"
-    | "functionResponse";
+  | "user"
+  | "error"
+  | "warning"
+  | "assistant"
+  | "modelResponse"
+  | "functionCall"
+  | "functionResponse";
   parts: any[];
 }
 
@@ -502,11 +502,6 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
-  public setRasterizeActiveLayerHandler(handler: () => void): this {
-    this.registeredFunctionHandlers["rasterizeActiveLayer"] = handler;
-    return this;
-  }
-
   public setOpenOpacitySliderPopup(handler: () => void): this {
     this.registeredFunctionHandlers["openOpacitySliderPopup"] = handler;
     return this;
@@ -541,11 +536,6 @@ export class ChatPanel extends EventEmitter {
 
   public setSelectSelectToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectSelectTool"] = handler;
-    return this;
-  }
-
-  public setSelectTextEditToolHandler(handler: () => void): this {
-    this.registeredFunctionHandlers["selectTextEditTool"] = handler;
     return this;
   }
 
@@ -622,6 +612,50 @@ export class ChatPanel extends EventEmitter {
     ) => void,
   ): this {
     this.registeredFunctionHandlers["resizeCanvas"] = handler;
+    return this;
+  }
+
+  public setUpdateActiveLayerBasicTextHandler(
+    handler: (basicText: {
+      content?: string;
+      fontFamily?: string;
+      fontSize?: number;
+      fontWeight?: string;
+      fontStyle?: string;
+      color?: string;
+      textAlign?: string;
+      lineHeight?: number;
+      letterSpacing?: number;
+    }) => void,
+  ): this {
+    this.registeredFunctionHandlers["updateActiveLayerBasicText"] = handler;
+    return this;
+  }
+
+  public setRasterizeActiveLayerHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["rasterizeActiveLayer"] = handler;
+    return this;
+  }
+
+  public setSelectTextEditToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectTextEditTool"] = handler;
+    return this;
+  }
+
+  public setUpdateActiveLayerShadowHandler(
+    handler: (shadow: {
+      color?: string;
+      blur?: number;
+      offsetX?: number;
+      offsetY?: number;
+    }) => void,
+  ): this {
+    this.registeredFunctionHandlers["updateActiveLayerShadow"] = handler;
+    return this;
+  }
+
+  public setDeleteActiveLayerShadowHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["deleteActiveLayerShadow"] = handler;
     return this;
   }
 
@@ -798,11 +832,6 @@ export class ChatPanel extends EventEmitter {
                     },
                     required: ["newOpacity"],
                   },
-                },
-                {
-                  name: "rasterizeActiveLayer",
-                  description:
-                    "Rasterize the currently active text layer, converting it into an image layer. This action is irreversible (except via undo) and the text will no longer be editable as text.",
                 },
                 {
                   name: "openOpacitySliderPopup",
@@ -1025,6 +1054,88 @@ export class ChatPanel extends EventEmitter {
                   description:
                     "Switch to the text edit tool to edit the text of the currently active text layer as well as resizing the text box by adjusting width and height instead of applying scale. If the active layer is not a text layer, this will do nothing. This tool is committed and exited, when pressing ESC or clicking outside of the text box, meaning selecting another layer will exit the tool.",
                 },
+                {
+                  name: "updateActiveLayerBasicText",
+                  description:
+                    "Update the BasicText properties of the currently active text layer. Only works on an active text layer. All fields of BasicText can be updated. If a field is not provided, it defaults to the previous value.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      content: {
+                        type: "string",
+                        description: "The text content.",
+                      },
+                      fontFamily: {
+                        type: "string",
+                        description: "The font family (e.g., Arial, Times New Roman).",
+                      },
+                      fontSize: {
+                        type: "number",
+                        description: "The font size in pixels.",
+                      },
+                      fontWeight: {
+                        type: "string",
+                        description: "The font weight (e.g., normal, bold, or numeric 100-900).",
+                      },
+                      fontStyle: {
+                        type: "string",
+                        description: "The font style (normal or italic).",
+                      },
+                      color: {
+                        type: "string",
+                        description: "The text color in hex format (e.g., #000000).",
+                      },
+                      textAlign: {
+                        type: "string",
+                        description: "The text alignment (left, center, or right).",
+                      },
+                      lineHeight: {
+                        type: "number",
+                        description: "The line height multiplier (e.g., 1.2).",
+                      },
+                      letterSpacing: {
+                        type: "number",
+                        description: "The letter spacing in pixels.",
+                      },
+                    },
+                  },
+                },
+                {
+                  name: "rasterizeActiveLayer",
+                  description:
+                    "Rasterize the currently active text layer, converting it into an image layer. This action is irreversible (except via undo) and the text will no longer be editable as text.",
+                },
+                {
+                  name: "updateActiveLayerShadow",
+                  description:
+                    "Update the shadow of the currently active layer. If the layer has no shadow, a new one will be created with default values (color: project background color, blur: 1, offsetX: 0, offsetY: 0) merged with the provided values. If the layer already has a shadow, the provided values will be merged with the existing shadow values.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      color: {
+                        type: "string",
+                        description: "The color of the shadow (e.g., #000000).",
+                      },
+                      blur: {
+                        type: "number",
+                        description: "The blur radius of the shadow.",
+                      },
+                      offsetX: {
+                        type: "number",
+                        description: "The horizontal offset of the shadow.",
+                      },
+                      offsetY: {
+                        type: "number",
+                        description: "The vertical offset of the shadow.",
+                      },
+                    },
+                  },
+                },
+                {
+                  name: "deleteActiveLayerShadow",
+                  description:
+                    "Remove the shadow from the currently active layer.",
+                },
               ],
             },
           ]),
@@ -1241,13 +1352,6 @@ export class ChatPanel extends EventEmitter {
               },
             );
             return true;
-          case "rasterizeActiveLayer":
-            await this.toolCall(
-              "rasterizeActiveLayer",
-              {},
-              this.registeredFunctionHandlers["rasterizeActiveLayer"],
-            );
-            return true;
           case "openOpacitySliderPopup":
             await this.toolCall(
               "openOpacitySliderPopup",
@@ -1386,6 +1490,38 @@ export class ChatPanel extends EventEmitter {
               "selectTextEditTool",
               {},
               this.registeredFunctionHandlers["selectTextEditTool"],
+            );
+            return true;
+          case "updateActiveLayerBasicText":
+            await this.toolCall(
+              "updateActiveLayerBasicText",
+              functionCall.args,
+              () =>
+                this.registeredFunctionHandlers["updateActiveLayerBasicText"](
+                  functionCall.args,
+                ),
+            );
+            return true;
+          case "rasterizeActiveLayer":
+            await this.toolCall(
+              "rasterizeActiveLayer",
+              {},
+              this.registeredFunctionHandlers["rasterizeActiveLayer"],
+            );
+            return true;
+          case "updateActiveLayerShadow":
+            await this.toolCall(
+              "updateActiveLayerShadow",
+              functionCall.args,
+              () =>
+                this.registeredFunctionHandlers["updateActiveLayerShadow"](
+                  functionCall.args,
+                ),
+            );
+            return true;
+          case "deleteActiveLayerShadow":
+            await this.toolCall("deleteActiveLayerShadow", {}, () =>
+              this.registeredFunctionHandlers["deleteActiveLayerShadow"](),
             );
             return true;
           default:

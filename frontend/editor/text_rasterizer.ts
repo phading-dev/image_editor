@@ -18,13 +18,6 @@ export function rasterizeTextLayer(layer: Layer): HTMLCanvasElement {
 
   const ctx = canvas.getContext("2d");
   const basicText = layer.basicText;
-  // Apply shadow if present
-  if (layer.shadow) {
-    ctx.shadowColor = layer.shadow.color;
-    ctx.shadowBlur = layer.shadow.blur;
-    ctx.shadowOffsetX = layer.shadow.offsetX;
-    ctx.shadowOffsetY = layer.shadow.offsetY;
-  }
   // Build font string
   const fontStyle = basicText.fontStyle;
   const fontWeight = basicText.fontWeight;
@@ -58,10 +51,10 @@ export function rasterizeTextLayer(layer: Layer): HTMLCanvasElement {
   const content = basicText.content;
   const paragraphs = content.split("\n");
   const lineHeight = fontSize * basicText.lineHeight;
-  let y = 0;
+  let y = (lineHeight - fontSize) / 2 + 1; // 1 is a magic number to align with how textarea renders text
 
   paragraphs.forEach((paragraph) => {
-    const wrappedLines = wrapText(ctx, paragraph, canvas.width - 20);
+    const wrappedLines = wrapText(ctx, paragraph, canvas.width);
     wrappedLines.forEach((line) => {
       ctx.fillText(line, textX, y);
       y += lineHeight;
@@ -71,10 +64,12 @@ export function rasterizeTextLayer(layer: Layer): HTMLCanvasElement {
 }
 
 /**
- * Wraps text to fit within a maximum width by breaking at word boundaries.
+ * Wraps text to fit within a maximum width, matching textarea's default behavior.
+ * Implements white-space: pre-wrap (preserves whitespace, wraps at boundaries)
+ * and overflow-wrap: break-word (breaks long words when necessary).
  * 
  * @param ctx The canvas context (needed for text measurement)
- * @param text The text to wrap
+ * @param text The text to wrap (single line/paragraph)
  * @param maxWidth Maximum width in pixels
  * @returns Array of wrapped lines
  */
@@ -87,23 +82,67 @@ function wrapText(
     return [text];
   }
 
-  const words = text.split(" ");
+  // Handle empty string
+  if (text === "") {
+    return [""];
+  }
+
   const lines: string[] = [];
   let currentLine = "";
 
-  for (let i = 0; i < words.length; i++) {
-    const testLine = currentLine + (currentLine ? " " : "") + words[i];
-    const metrics = ctx.measureText(testLine);
+  // Split by whitespace boundaries while preserving spaces
+  // This regex splits but keeps the spaces
+  const tokens = text.split(/(\s+)/);
 
-    if (metrics.width > maxWidth && currentLine !== "") {
-      lines.push(currentLine);
-      currentLine = words[i];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+
+    // Skip empty tokens
+    if (token === "") {
+      continue;
+    }
+
+    // Check if the token itself is a word that's too long (overflow-wrap: break-word)
+    const tokenMetrics = ctx.measureText(token);
+    const isLongWord = tokenMetrics.width > maxWidth && !/\s/.test(token);
+
+    if (isLongWord) {
+      // Token is a long word that needs to be broken character by character
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = "";
+      }
+
+      // Break the word character by character
+      for (let j = 0; j < token.length; j++) {
+        const char = token[j];
+        const testChar = currentLine + char;
+        const charMetrics = ctx.measureText(testChar);
+
+        if (charMetrics.width > maxWidth && currentLine !== "") {
+          lines.push(currentLine);
+          currentLine = char;
+        } else {
+          currentLine = testChar;
+        }
+      }
     } else {
-      currentLine = testLine;
+      // Normal token (word or whitespace that fits)
+      const testLine = currentLine + token;
+      const metrics = ctx.measureText(testLine);
+
+      if (metrics.width > maxWidth && currentLine !== "") {
+        // Normal word wrap
+        lines.push(currentLine);
+        currentLine = token;
+      } else {
+        currentLine = testLine;
+      }
     }
   }
 
-  if (currentLine) {
+  // Push the last line
+  if (currentLine !== "") {
     lines.push(currentLine);
   }
 

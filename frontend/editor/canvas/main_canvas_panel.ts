@@ -199,7 +199,6 @@ export class MainCanvasPanel extends EventEmitter {
               "position: absolute",
               "pointer-events: none",
               `border: 2px dashed ${COLOR_THEME.neutral3}`,
-              "will-change: transform",
               "left: -2px",
               "top: -2px",
             ].join("; "),
@@ -428,14 +427,18 @@ export class MainCanvasPanel extends EventEmitter {
     canvas.style.transform = `rotate(${layer.transform.rotation}deg) scale(${layer.transform.scaleX * this.scaleFactor}, ${layer.transform.scaleY * this.scaleFactor})`;
     canvas.style.opacity = `${layer.opacity / 100}`;
     canvas.style.pointerEvents = "none";
+    if (layer.shadow) {
+      canvas.style.filter = `drop-shadow(${layer.shadow.offsetX}px ${layer.shadow.offsetY}px ${layer.shadow.blur}px ${layer.shadow.color})`;
+    } else {
+      canvas.style.filter = "none";
+    }
   }
 
   private updateTextareaStyle(
     textarea: HTMLTextAreaElement,
     layer: Layer,
   ): void {
-    // Blur the textarea to remove focus and text selection.
-    textarea.blur();
+    textarea.setSelectionRange(0, 0);
     const basicText = layer.basicText;
     textarea.style.fontFamily = basicText.fontFamily;
     textarea.style.fontSize = `${basicText.fontSize}px`;
@@ -444,12 +447,15 @@ export class MainCanvasPanel extends EventEmitter {
     textarea.style.color = basicText.color;
     textarea.style.textAlign = basicText.textAlign;
     textarea.style.lineHeight = `${basicText.lineHeight}`;
+    textarea.style.verticalAlign = "top";
     textarea.style.letterSpacing = `${basicText.letterSpacing}px`;
     textarea.style.width = `${layer.width}px`;
     textarea.style.height = `${layer.height}px`;
     textarea.style.opacity = `${layer.opacity / 100}`;
     if (layer.shadow) {
-      textarea.style.textShadow = `${layer.shadow.offsetX}px ${layer.shadow.offsetY}px ${layer.shadow.blur}px ${layer.shadow.color}`;
+      textarea.style.filter = `drop-shadow(${layer.shadow.offsetX}px ${layer.shadow.offsetY}px ${layer.shadow.blur}px ${layer.shadow.color})`;
+    } else {
+      textarea.style.filter = "none";
     }
 
     // Basic textarea styling
@@ -826,6 +832,12 @@ export class MainCanvasPanel extends EventEmitter {
       // Rotate around the top-left corner to stay consistent with translation.
       context.rotate((layer.transform.rotation * Math.PI) / 180);
       context.scale(layer.transform.scaleX, layer.transform.scaleY);
+      if (layer.shadow) {
+        context.shadowColor = layer.shadow.color;
+        context.shadowBlur = layer.shadow.blur;
+        context.shadowOffsetX = layer.shadow.offsetX;
+        context.shadowOffsetY = layer.shadow.offsetY;
+      }
       context.drawImage(layerCanvas, 0, 0);
       context.restore();
     }

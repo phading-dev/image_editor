@@ -87,9 +87,8 @@ export class TextEditTool {
     this.borderElement = E.div({
       style: [
         "position: absolute",
-        `border: 0.125rem solid ${COLOR_THEME.accent3}`,
+        `border: 2px solid ${COLOR_THEME.accent3}`,
         "pointer-events: none",
-        "box-sizing: border-box",
       ].join("; "),
     });
     this.outlineContainer.appendChild(this.borderElement);
@@ -132,8 +131,8 @@ export class TextEditTool {
     const layerWidth = this.layer.width * scaleFactor;
     const layerHeight = this.layer.height * scaleFactor;
 
-    this.borderElement.style.left = "0px";
-    this.borderElement.style.top = "0px";
+    this.borderElement.style.left = "-2px"; // Account for border width
+    this.borderElement.style.top = "-2px"; // Account for border width
     this.borderElement.style.width = `${layerWidth}px`;
     this.borderElement.style.height = `${layerHeight}px`;
 
@@ -335,6 +334,7 @@ export class TextEditTool {
 
   public remove(): void {
     this.commitText();
+    this.updateTextareaStyle(this.textarea, this.layer);
     this.handles.forEach((handle) => {
       handle.remove();
     });
@@ -356,6 +356,5 @@ export class TextEditTool {
       "pointercancel",
       this.handlePointerUpOrCancel,
     );
-    this.updateTextareaStyle(this.textarea, this.layer);
   }
 }

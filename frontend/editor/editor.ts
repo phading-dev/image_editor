@@ -18,6 +18,8 @@ import { ReorderLayerCommand } from "./commands/reorder_layer_command";
 import { ResizeCanvasCommand } from "./commands/resize_canvas_command";
 import { ResizeTextLayerCommand } from "./commands/resize_text_layer_command";
 import { SetLayerOpacityCommand } from "./commands/set_layer_opacity_command";
+import { UpdateLayerShadowCommand } from "./commands/update_layer_shadow_command";
+import { UpdateBasicTextCommand } from "./commands/update_basic_text_command";
 import { ShowLayersCommand } from "./commands/show_layers_command";
 import { TransformLayerCommand } from "./commands/transform_layer_command";
 import { UnlockLayersCommand } from "./commands/unlock_layers_command";
@@ -321,7 +323,13 @@ export class Editor {
       )
       .on("textEdit", (layer, oldText, newText) => {
         this.commandHistoryManager.pushCommand(
-          new EditTextCommand(layer, oldText, newText, this.mainCanvasPanel),
+          new EditTextCommand(
+            layer,
+            oldText,
+            newText,
+            this.mainCanvasPanel,
+            this.layersPanel,
+          ),
         );
       });
     this.chatPanel
@@ -627,27 +635,6 @@ export class Editor {
           ),
         );
       })
-      .setRasterizeActiveLayerHandler(() => {
-        if (!this.layersPanel.activeLayerId) {
-          throw new Error("No active layer to rasterize.");
-        }
-        const layer = this.project.metadata.layers.find(
-          (layer) => layer.id === this.layersPanel.activeLayerId,
-        );
-        if (!layer.basicText) {
-          throw new Error("Active layer is not a text layer.");
-        }
-        if (layer.locked) {
-          throw new Error("Active layer is locked and cannot be rasterized.");
-        }
-        this.commandHistoryManager.pushCommand(
-          new RasterizeTextLayerCommand(
-            this.project,
-            layer,
-            this.mainCanvasPanel,
-          ),
-        );
-      })
       .setOpenOpacitySliderPopup(() => {
         this.openOpacitySliderPopup();
       })
@@ -853,7 +840,145 @@ export class Editor {
           throw new Error("Active layer is locked and cannot be edited.");
         }
         this.mainCanvasPanel.selectTextEditTool();
-      });
+      })
+      .setRasterizeActiveLayerHandler(() => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to rasterize.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        if (!layer.basicText) {
+          throw new Error("Active layer is not a text layer.");
+        }
+        if (layer.locked) {
+          throw new Error("Active layer is locked and cannot be rasterized.");
+        }
+        this.commandHistoryManager.pushCommand(
+          new RasterizeTextLayerCommand(
+            this.project,
+            layer,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setUpdateActiveLayerShadowHandler(
+        (shadow: {
+          color?: string;
+          blur?: number;
+          offsetX?: number;
+          offsetY?: number;
+        }) => {
+          if (!this.layersPanel.activeLayerId) {
+            throw new Error("No active layer to update shadow.");
+          }
+          const layer = this.project.metadata.layers.find(
+            (layer) => layer.id === this.layersPanel.activeLayerId,
+          );
+          if (layer.locked) {
+            throw new Error(
+              "Active layer is locked and cannot update shadow.",
+            );
+          }
+          const oldShadow = layer.shadow;
+          const defaultShadow = {
+            color: this.project.metadata.settings.backgroundColor,
+            blur: 1,
+            offsetX: 0,
+            offsetY: 0,
+          };
+          const baseShadow = oldShadow || defaultShadow;
+          const newShadow = {
+            color: shadow.color ?? baseShadow.color,
+            blur: shadow.blur ?? baseShadow.blur,
+            offsetX: shadow.offsetX ?? baseShadow.offsetX,
+            offsetY: shadow.offsetY ?? baseShadow.offsetY,
+          };
+          this.commandHistoryManager.pushCommand(
+            new UpdateLayerShadowCommand(
+              layer,
+              oldShadow,
+              newShadow,
+              this.layersPanel,
+              this.mainCanvasPanel,
+            ),
+          );
+        },
+      )
+      .setDeleteActiveLayerShadowHandler(() => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to delete shadow.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        if (layer.locked) {
+          throw new Error(
+            "Active layer is locked and cannot delete shadow.",
+          );
+        }
+        if (!layer.shadow) {
+          throw new Error("Active layer has no shadow to delete.");
+        }
+        this.commandHistoryManager.pushCommand(
+          new UpdateLayerShadowCommand(
+            layer,
+            layer.shadow,
+            undefined,
+            this.layersPanel,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setUpdateActiveLayerBasicTextHandler(
+        (basicText: {
+          content?: string;
+          fontFamily?: string;
+          fontSize?: number;
+          fontWeight?: string;
+          fontStyle?: string;
+          color?: string;
+          textAlign?: string;
+          lineHeight?: number;
+          letterSpacing?: number;
+        }) => {
+          if (!this.layersPanel.activeLayerId) {
+            throw new Error("No active layer to update text.");
+          }
+          const layer = this.project.metadata.layers.find(
+            (layer) => layer.id === this.layersPanel.activeLayerId,
+          );
+          if (!layer.basicText) {
+            throw new Error("Active layer is not a text layer.");
+          }
+          if (layer.locked) {
+            throw new Error(
+              "Active layer is locked and cannot update text.",
+            );
+          }
+          const oldBasicText = { ...layer.basicText };
+          const newBasicText = {
+            content: basicText.content ?? oldBasicText.content,
+            fontFamily: basicText.fontFamily ?? oldBasicText.fontFamily,
+            fontSize: basicText.fontSize ?? oldBasicText.fontSize,
+            fontWeight: basicText.fontWeight ?? oldBasicText.fontWeight,
+            fontStyle: basicText.fontStyle ?? oldBasicText.fontStyle,
+            color: basicText.color ?? oldBasicText.color,
+            textAlign: basicText.textAlign ?? oldBasicText.textAlign,
+            lineHeight: basicText.lineHeight ?? oldBasicText.lineHeight,
+            letterSpacing: basicText.letterSpacing ?? oldBasicText.letterSpacing,
+          };
+          this.commandHistoryManager.pushCommand(
+            new UpdateBasicTextCommand(
+              layer,
+              oldBasicText,
+              newBasicText,
+              this.layersPanel,
+              this.mainCanvasPanel,
+            ),
+          );
+        },
+      );
     this.mainCanvasPanel.rerender();
     this.chatPanel.sendAssistantMessage("Hi, can you introduce yourself?");
   }
