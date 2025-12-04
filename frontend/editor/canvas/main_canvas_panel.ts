@@ -319,14 +319,10 @@ export class MainCanvasPanel extends EventEmitter {
     this.document.addEventListener("keydown", this.handleKeyDown);
     this.document.addEventListener("keyup", this.handleKeyUp);
     this.canvasScrollContainer.addEventListener("scroll", () => {
-      this.drawActiveLayerOutline();
-      this.cropTool?.updateOverlayAndHandles();
-      this.resizeCanvasTool?.updateOverlayAndHandles();
+      this.drawActiveLayerOutlineAndHandles();
     });
     this.resizeObserver = new ResizeObserver(() => {
-      this.drawActiveLayerOutline();
-      this.cropTool?.updateOverlayAndHandles();
-      this.resizeCanvasTool?.updateOverlayAndHandles();
+      this.drawActiveLayerOutlineAndHandles();
     });
     this.resizeObserver.observe(this.canvasScrollContainer);
 
@@ -359,11 +355,7 @@ export class MainCanvasPanel extends EventEmitter {
     // Draw checkerboard pattern to indicate transparency
     this.drawCheckerboard();
     this.renderLayers();
-    this.drawActiveLayerOutline();
-    this.freeTransformTool?.updateHandlePositions();
-    this.textEditTool?.updateBorderAndHandlePositionsAndEditingStyle();
-    this.cropTool?.updateOverlayAndHandles();
-    this.resizeCanvasTool?.updateOverlayAndHandles();
+    this.drawActiveLayerOutlineAndHandles();
   }
 
   private drawCheckerboard(): void {
@@ -477,7 +469,15 @@ export class MainCanvasPanel extends EventEmitter {
     textarea.style.transform = `rotate(${layer.transform.rotation}deg) scale(${layer.transform.scaleX * this.scaleFactor}, ${layer.transform.scaleY * this.scaleFactor})`;
   }
 
-  public drawActiveLayerOutline(): void {
+  public drawActiveLayerOutlineAndHandles(): void {
+    this.drawActiveLayerOutline();
+    this.freeTransformTool?.updateHandlePositions();
+    this.textEditTool?.updateBorderAndHandlePositionsAndEditingStyle();
+    this.cropTool?.updateOverlayAndHandles();
+    this.resizeCanvasTool?.updateOverlayAndHandles();
+  }
+
+  private drawActiveLayerOutline(): void {
     const activeLayer = this.getActiveLayer();
     if (!activeLayer) {
       this.outlineContainer.style.display = "none";

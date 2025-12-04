@@ -193,7 +193,7 @@ export class Editor {
         );
       })
       .on("layerSelectionChanged", () => {
-        this.mainCanvasPanel.drawActiveLayerOutline();
+        this.mainCanvasPanel.drawActiveLayerOutlineAndHandles();
         this.chatPanel.appendMessage({
           role: "system",
           parts: [{ text: "Layer selection changed" }],
