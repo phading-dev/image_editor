@@ -11,7 +11,10 @@ import { CropLayerCommand } from "./commands/crop_layer_command";
 import { DeleteLayerCommand } from "./commands/delete_layer_command";
 import { DuplicateLayerCommand } from "./commands/duplicate_layer_command";
 import { EditTextCommand } from "./commands/edit_text_command";
+import { FeatherSelectionMaskCommand } from "./commands/feather_selection_mask_command";
+import { GrowShrinkSelectionMaskCommand } from "./commands/grow_shrink_selection_mask_command";
 import { HideLayersCommand } from "./commands/hide_layers_command";
+import { InvertSelectionMaskCommand } from "./commands/invert_selection_mask_command";
 import { LockLayersCommand } from "./commands/lock_layers_command";
 import { MoveLayersCommand } from "./commands/move_layers_command";
 import { PaintCommand } from "./commands/paint_command";
@@ -854,10 +857,39 @@ export class Editor {
       .setSelectRectangleMaskSelectionToolHandler(() => {
         this.mainCanvasPanel.selectRectangleMaskSelectionTool();
       })
+      .setSelectOvalMaskSelectionToolHandler(() => {
+        this.mainCanvasPanel.selectOvalMaskSelectionTool();
+      })
       .setClearSelectionMaskHandler(() => {
         this.commandHistoryManager.pushCommand(
           new ClearSelectionMaskCommand(
             this.selectionMask,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setInvertSelectionMaskHandler(() => {
+        this.commandHistoryManager.pushCommand(
+          new InvertSelectionMaskCommand(
+            this.selectionMask,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setFeatherSelectionMaskHandler((radius: number) => {
+        this.commandHistoryManager.pushCommand(
+          new FeatherSelectionMaskCommand(
+            this.selectionMask,
+            radius,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setGrowShrinkSelectionMaskHandler((radius: number) => {
+        this.commandHistoryManager.pushCommand(
+          new GrowShrinkSelectionMaskCommand(
+            this.selectionMask,
+            radius,
             this.mainCanvasPanel,
           ),
         );

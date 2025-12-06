@@ -9,6 +9,7 @@ import { rasterizeTextLayer } from "../text_rasterizer";
 import { CropTool } from "./crop_tool";
 import { FreeTransformTool } from "./free_transform_tool";
 import { MoveTool } from "./move_tool";
+import { OvalMaskSelectionTool } from "./oval_mask_selection_tool";
 import { PaintTool } from "./paint_tool";
 import { PanTool } from "./pan_tool";
 import { RectangleMaskSelectionTool } from "./rectangle_mask_selection_tool";
@@ -117,6 +118,7 @@ export class MainCanvasPanel extends EventEmitter {
   private textEditTool: TextEditTool;
   private selectTool: SelectTool;
   private rectangleMaskSelectionTool: RectangleMaskSelectionTool;
+  private ovalMaskSelectionTool: OvalMaskSelectionTool;
   private toolSwitch = new TabsSwitcher();
   private selectPreviousTool: () => void;
   private resizeObserver: ResizeObserver;
@@ -536,6 +538,7 @@ export class MainCanvasPanel extends EventEmitter {
     this.cropTool?.updateOverlayAndHandles();
     this.resizeCanvasTool?.updateOverlayAndHandles();
     this.rectangleMaskSelectionTool?.updateOverlay();
+    this.ovalMaskSelectionTool?.updateOverlay();
   }
 
   private drawActiveLayerOutline(): void {
@@ -792,6 +795,27 @@ export class MainCanvasPanel extends EventEmitter {
       () => {
         this.rectangleMaskSelectionTool.remove();
         this.rectangleMaskSelectionTool = undefined;
+      },
+    );
+  }
+
+  public selectOvalMaskSelectionTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.ovalMaskSelectionTool = new OvalMaskSelectionTool(
+          this.outlineContainerParent,
+          this.canvasScrollContainer,
+          this.canvas,
+          () => this.scaleFactor,
+          (mask, mode) => {
+            this.emit("combineMaskSelection", mask, mode);
+          },
+        );
+        this.selectPreviousTool = () => this.selectOvalMaskSelectionTool();
+      },
+      () => {
+        this.ovalMaskSelectionTool.remove();
+        this.ovalMaskSelectionTool = undefined;
       },
     );
   }

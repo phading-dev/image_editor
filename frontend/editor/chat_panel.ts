@@ -608,8 +608,30 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setSelectOvalMaskSelectionToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectOvalMaskSelectionTool"] = handler;
+    return this;
+  }
+
   public setClearSelectionMaskHandler(handler: () => void): this {
     this.registeredFunctionHandlers["clearSelectionMask"] = handler;
+    return this;
+  }
+
+  public setInvertSelectionMaskHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["invertSelectionMask"] = handler;
+    return this;
+  }
+
+  public setFeatherSelectionMaskHandler(handler: (radius: number) => void): this {
+    this.registeredFunctionHandlers["featherSelectionMask"] = handler;
+    return this;
+  }
+
+  public setGrowShrinkSelectionMaskHandler(
+    handler: (radius: number) => void,
+  ): this {
+    this.registeredFunctionHandlers["growShrinkSelectionMask"] = handler;
     return this;
   }
 
@@ -1042,8 +1064,47 @@ export class ChatPanel extends EventEmitter {
                     "Switch to the rectangle mask selection tool to create rectangular selections on the canvas. Hold Shift to add to selection, Ctrl to subtract from selection, and Shift+Ctrl to intersect with selection. The selection will be shown with a dark overlay on non-selected areas.",
                 },
                 {
+                  name: "selectOvalMaskSelectionTool",
+                  description:
+                    "Switch to the oval mask selection tool to create oval selections on the canvas. Hold Shift to add to selection, Ctrl to subtract from selection, and Shift+Ctrl to intersect with selection. The selection will be shown with a dark overlay on non-selected areas.",
+                },
+                {
                   name: "clearSelectionMask",
                   description: "Clear the current selection mask.",
+                },
+                {
+                  name: "invertSelectionMask",
+                  description: "Invert the current selection mask.",
+                },
+                {
+                  name: "featherSelectionMask",
+                  description: "Feather the edges of the current selection mask.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      radius: {
+                        type: "number",
+                        description: "The radius of the feather blur in pixels.",
+                      },
+                    },
+                    required: ["radius"],
+                  },
+                },
+                {
+                  name: "growShrinkSelectionMask",
+                  description:
+                    "Grow (expand) or shrink (contract) the current selection mask.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      radius: {
+                        type: "number",
+                        description:
+                          "The radius to grow (positive) or shrink (negative) in pixels.",
+                      },
+                    },
+                    required: ["radius"],
+                  },
                 },
                 {
                   name: "selectPaintTool",
@@ -1510,11 +1571,51 @@ export class ChatPanel extends EventEmitter {
               ],
             );
             return true;
+          case "selectOvalMaskSelectionTool":
+            await this.toolCall(
+              "selectOvalMaskSelectionTool",
+              {},
+              this.registeredFunctionHandlers[
+              "selectOvalMaskSelectionTool"
+              ],
+            );
+            return true;
           case "clearSelectionMask":
             await this.toolCall(
               "clearSelectionMask",
               {},
               this.registeredFunctionHandlers["clearSelectionMask"],
+            );
+            return true;
+          case "invertSelectionMask":
+            await this.toolCall(
+              "invertSelectionMask",
+              {},
+              this.registeredFunctionHandlers["invertSelectionMask"],
+            );
+            return true;
+          case "featherSelectionMask":
+            await this.toolCall("featherSelectionMask", functionCall.args, () => {
+              if (typeof functionCall.args?.radius !== "number") {
+                throw new Error("radius parameter is required.");
+              }
+              this.registeredFunctionHandlers["featherSelectionMask"](
+                functionCall.args.radius,
+              );
+            });
+            return true;
+          case "growShrinkSelectionMask":
+            await this.toolCall(
+              "growShrinkSelectionMask",
+              functionCall.args,
+              () => {
+                if (typeof functionCall.args?.radius !== "number") {
+                  throw new Error("radius parameter is required.");
+                }
+                this.registeredFunctionHandlers["growShrinkSelectionMask"](
+                  functionCall.args.radius,
+                );
+              },
             );
             return true;
           case "cropActiveLayer":
