@@ -8,8 +8,10 @@ import { SelectionMode } from "../selection_mask_utils";
 import { rasterizeTextLayer } from "../text_rasterizer";
 import { CropTool } from "./crop_tool";
 import { FreeTransformTool } from "./free_transform_tool";
+import { LassoMaskSelectionTool } from "./lasso_mask_selection_tool";
 import { MoveTool } from "./move_tool";
 import { OvalMaskSelectionTool } from "./oval_mask_selection_tool";
+import { PolygonalMaskSelectionTool } from "./polygonal_mask_selection_tool";
 import { PaintTool } from "./paint_tool";
 import { PanTool } from "./pan_tool";
 import { RectangleMaskSelectionTool } from "./rectangle_mask_selection_tool";
@@ -119,6 +121,8 @@ export class MainCanvasPanel extends EventEmitter {
   private selectTool: SelectTool;
   private rectangleMaskSelectionTool: RectangleMaskSelectionTool;
   private ovalMaskSelectionTool: OvalMaskSelectionTool;
+  private lassoMaskSelectionTool: LassoMaskSelectionTool;
+  private polygonalMaskSelectionTool: PolygonalMaskSelectionTool;
   private toolSwitch = new TabsSwitcher();
   private selectPreviousTool: () => void;
   private resizeObserver: ResizeObserver;
@@ -539,6 +543,8 @@ export class MainCanvasPanel extends EventEmitter {
     this.resizeCanvasTool?.updateOverlayAndHandles();
     this.rectangleMaskSelectionTool?.updateOverlay();
     this.ovalMaskSelectionTool?.updateOverlay();
+    this.lassoMaskSelectionTool?.updateOverlay();
+    this.polygonalMaskSelectionTool?.updateOverlay();
   }
 
   private drawActiveLayerOutline(): void {
@@ -816,6 +822,48 @@ export class MainCanvasPanel extends EventEmitter {
       () => {
         this.ovalMaskSelectionTool.remove();
         this.ovalMaskSelectionTool = undefined;
+      },
+    );
+  }
+
+  public selectLassoMaskSelectionTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.lassoMaskSelectionTool = new LassoMaskSelectionTool(
+          this.outlineContainerParent,
+          this.canvasScrollContainer,
+          this.canvas,
+          () => this.scaleFactor,
+          (mask, mode) => {
+            this.emit("combineMaskSelection", mask, mode);
+          },
+        );
+        this.selectPreviousTool = () => this.selectLassoMaskSelectionTool();
+      },
+      () => {
+        this.lassoMaskSelectionTool.remove();
+        this.lassoMaskSelectionTool = undefined;
+      },
+    );
+  }
+
+  public selectPolygonalMaskSelectionTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.polygonalMaskSelectionTool = new PolygonalMaskSelectionTool(
+          this.outlineContainerParent,
+          this.canvasScrollContainer,
+          this.canvas,
+          () => this.scaleFactor,
+          (mask, mode) => {
+            this.emit("combineMaskSelection", mask, mode);
+          },
+        );
+        this.selectPreviousTool = () => this.selectPolygonalMaskSelectionTool();
+      },
+      () => {
+        this.polygonalMaskSelectionTool.remove();
+        this.polygonalMaskSelectionTool = undefined;
       },
     );
   }

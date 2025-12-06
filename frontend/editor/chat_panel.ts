@@ -613,6 +613,17 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setSelectLassoMaskSelectionToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectLassoMaskSelectionTool"] = handler;
+    return this;
+  }
+
+  public setSelectPolygonalMaskSelectionToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectPolygonalMaskSelectionTool"] =
+      handler;
+    return this;
+  }
+
   public setClearSelectionMaskHandler(handler: () => void): this {
     this.registeredFunctionHandlers["clearSelectionMask"] = handler;
     return this;
@@ -723,6 +734,7 @@ export class ChatPanel extends EventEmitter {
                   "No need to confirm actions, because the user can always undo them.",
                   "Even if it's unclear whether the user wants to directly edit the image or use the tools, always try to select the appropriate tool first.",
                   "DO NOT ignore the request even if the user requests the same tool consecutively, because it may be switched in other ways and you are not aware of it.",
+                  "When a tool is selected, inform the user about how to use it, especially when it involes keyboard shortcuts.",
                 ].join(" "),
               },
             ],
@@ -1067,6 +1079,16 @@ export class ChatPanel extends EventEmitter {
                   name: "selectOvalMaskSelectionTool",
                   description:
                     "Switch to the oval mask selection tool to create oval selections on the canvas. Hold Shift to add to selection, Ctrl to subtract from selection, and Shift+Ctrl to intersect with selection. The selection will be shown with a dark overlay on non-selected areas.",
+                },
+                {
+                  name: "selectLassoMaskSelectionTool",
+                  description:
+                    "Switch to the lasso/freehand mask selection tool to create freeform polygon selections on the canvas by drawing. Hold Shift to add to selection, Ctrl to subtract from selection, and Shift+Ctrl to intersect with selection. The selection will be shown with a dark overlay on non-selected areas.",
+                },
+                {
+                  name: "selectPolygonalMaskSelectionTool",
+                  description:
+                    "Switch to the polygonal mask selection tool to create polygon selections by clicking to place vertices. Click near the start point or double-click to close the polygon. Press Backspace to remove the last vertex. Hold Shift to add to selection, Ctrl to subtract from selection, and Shift+Ctrl to intersect with selection. The selection will be shown with a dark overlay on non-selected areas.",
                 },
                 {
                   name: "clearSelectionMask",
@@ -1577,6 +1599,24 @@ export class ChatPanel extends EventEmitter {
               {},
               this.registeredFunctionHandlers[
               "selectOvalMaskSelectionTool"
+              ],
+            );
+            return true;
+          case "selectLassoMaskSelectionTool":
+            await this.toolCall(
+              "selectLassoMaskSelectionTool",
+              {},
+              this.registeredFunctionHandlers[
+              "selectLassoMaskSelectionTool"
+              ],
+            );
+            return true;
+          case "selectPolygonalMaskSelectionTool":
+            await this.toolCall(
+              "selectPolygonalMaskSelectionTool",
+              {},
+              this.registeredFunctionHandlers[
+              "selectPolygonalMaskSelectionTool"
               ],
             );
             return true;

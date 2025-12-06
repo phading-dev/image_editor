@@ -860,6 +860,12 @@ export class Editor {
       .setSelectOvalMaskSelectionToolHandler(() => {
         this.mainCanvasPanel.selectOvalMaskSelectionTool();
       })
+      .setSelectLassoMaskSelectionToolHandler(() => {
+        this.mainCanvasPanel.selectLassoMaskSelectionTool();
+      })
+      .setSelectPolygonalMaskSelectionToolHandler(() => {
+        this.mainCanvasPanel.selectPolygonalMaskSelectionTool();
+      })
       .setClearSelectionMaskHandler(() => {
         this.commandHistoryManager.pushCommand(
           new ClearSelectionMaskCommand(
