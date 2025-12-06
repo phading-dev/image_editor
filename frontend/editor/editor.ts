@@ -305,10 +305,10 @@ export class Editor {
           new ResizeCanvasCommand(
             this.project,
             this.selectionMask,
-            newWidth,
-            newHeight,
-            deltaX,
-            deltaY,
+            Math.round(newWidth),
+            Math.round(newHeight),
+            Math.round(deltaX),
+            Math.round(deltaY),
             this.mainCanvasPanel,
           ),
         );
@@ -343,10 +343,10 @@ export class Editor {
               oldHeight,
               oldX,
               oldY,
-              newWidth,
-              newHeight,
-              newX,
-              newY,
+              Math.round(newWidth),
+              Math.round(newHeight),
+              Math.round(newX),
+              Math.round(newY),
               this.mainCanvasPanel,
             ),
           );
@@ -839,7 +839,12 @@ export class Editor {
           this.commandHistoryManager.pushCommand(
             new CropLayerCommand(
               layer,
-              cropRect,
+              {
+                x: Math.round(cropRect.x),
+                y: Math.round(cropRect.y),
+                width: Math.round(cropRect.width),
+                height: Math.round(cropRect.height),
+              },
               this.mainCanvasPanel,
               this.project.layersToCanvas,
             ),
@@ -884,10 +889,10 @@ export class Editor {
             new ResizeCanvasCommand(
               this.project,
               this.selectionMask,
-              finalWidth,
-              finalHeight,
-              finalDeltaX,
-              finalDeltaY,
+              Math.round(finalWidth),
+              Math.round(finalHeight),
+              Math.round(finalDeltaX),
+              Math.round(finalDeltaY),
               this.mainCanvasPanel,
             ),
           );
