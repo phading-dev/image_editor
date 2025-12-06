@@ -3,12 +3,15 @@ import { COLOR_THEME } from "../../color_theme";
 import { FONT_S } from "../../sizes";
 import { Project } from "../project";
 import { Layer, Transform } from "../project_metadata";
+import { SelectionMask } from "../selection_mask";
+import { SelectionMode } from "../selection_mask_utils";
 import { rasterizeTextLayer } from "../text_rasterizer";
 import { CropTool } from "./crop_tool";
 import { FreeTransformTool } from "./free_transform_tool";
 import { MoveTool } from "./move_tool";
 import { PaintTool } from "./paint_tool";
 import { PanTool } from "./pan_tool";
+import { RectangleMaskSelectionTool } from "./rectangle_mask_selection_tool";
 import { ResizeCanvasTool } from "./resize_canvas_tool";
 import { SelectTool } from "./select_tool";
 import { TextEditTool } from "./text_edit_tool";
@@ -72,12 +75,19 @@ export interface MainCanvasPanel {
       newY: number,
     ) => void,
   ): this;
+  on(
+    event: "combineMaskSelection",
+    listener: (mask: ImageData, mode: SelectionMode) => void,
+  ): this;
   on(event: "warning", listener: (message: string) => void): this;
 }
 
 export class MainCanvasPanel extends EventEmitter {
-  public static create(project: Project): MainCanvasPanel {
-    return new MainCanvasPanel(document, project);
+  public static create(
+    project: Project,
+    selectionMask: SelectionMask,
+  ): MainCanvasPanel {
+    return new MainCanvasPanel(document, project, selectionMask);
   }
 
   private static readonly ZOOM_STEPS = [
@@ -106,13 +116,17 @@ export class MainCanvasPanel extends EventEmitter {
   private panTool: PanTool;
   private textEditTool: TextEditTool;
   private selectTool: SelectTool;
+  private rectangleMaskSelectionTool: RectangleMaskSelectionTool;
   private toolSwitch = new TabsSwitcher();
   private selectPreviousTool: () => void;
   private resizeObserver: ResizeObserver;
+  private selectionMaskCanvas: HTMLCanvasElement;
+  private selectionMaskContext: CanvasRenderingContext2D;
 
   public constructor(
     private document: Document,
     private project: Project,
+    private selectionMask: SelectionMask,
   ) {
     super();
     let canvasRef = new Ref<HTMLCanvasElement>();
@@ -124,6 +138,7 @@ export class MainCanvasPanel extends EventEmitter {
     let zoomLevelDisplayRef = new Ref<HTMLSpanElement>();
     let zoomOutButtonRef = new Ref<HTMLButtonElement>();
     let zoomInButtonRef = new Ref<HTMLButtonElement>();
+    let selectionMaskCanvasRef = new Ref<HTMLCanvasElement>();
 
     this.element = E.div(
       {
@@ -181,6 +196,16 @@ export class MainCanvasPanel extends EventEmitter {
               style: ["width: 100%", "height: 100%", "display: block"].join(
                 "; ",
               ),
+            }),
+            E.canvas({
+              ref: selectionMaskCanvasRef,
+              style: [
+                "position: absolute",
+                "left: 0",
+                "top: 0",
+                "width: 100%",
+                "height: 100%",
+              ].join("; "),
             }),
           ),
         ),
@@ -312,6 +337,8 @@ export class MainCanvasPanel extends EventEmitter {
     this.zoomLevelDisplay = zoomLevelDisplayRef.val;
     this.zoomOutButton = zoomOutButtonRef.val;
     this.zoomInButton = zoomInButtonRef.val;
+    this.selectionMaskCanvas = selectionMaskCanvasRef.val;
+    this.selectionMaskContext = this.selectionMaskCanvas.getContext("2d")!;
     this.context = this.canvas.getContext("2d");
 
     this.zoomOutButton.addEventListener("click", () => this.zoomOut());
@@ -349,20 +376,25 @@ export class MainCanvasPanel extends EventEmitter {
   public rerender(): void {
     this.canvasContainer.style.width = `${this.project.metadata.width * this.scaleFactor}px`;
     this.canvasContainer.style.height = `${this.project.metadata.height * this.scaleFactor}px`;
-    this.canvas.width = this.project.metadata.width;
-    this.canvas.height = this.project.metadata.height;
-    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    while (this.canvasContainer.lastChild && this.canvasContainer.lastChild !== this.canvas) {
+      this.canvasContainer.removeChild(this.canvasContainer.lastChild);
+    }
     // Draw checkerboard pattern to indicate transparency
     this.drawCheckerboard();
     this.renderLayers();
+    this.renderSelectionMask();
     this.drawActiveLayerOutlineAndHandles();
   }
 
   private drawCheckerboard(): void {
+    this.canvasContainer.appendChild(this.canvas);
+    this.canvas.width = this.project.metadata.width;
+    this.canvas.height = this.project.metadata.height;
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
     const squareSize = 10; // Size of each checkerboard square in pixels
     const lightColor = "#ffffff";
     const darkColor = "#cccccc";
-
     for (let y = 0; y < this.canvas.height; y += squareSize) {
       for (let x = 0; x < this.canvas.width; x += squareSize) {
         // Alternate colors based on position
@@ -375,14 +407,6 @@ export class MainCanvasPanel extends EventEmitter {
   }
 
   private renderLayers(): void {
-    // Clear all layer elements from canvasContainer (keep only the main canvas)
-    const children = Array.from(this.canvasContainer.children);
-    for (const child of children) {
-      if (child !== this.canvas) {
-        child.remove();
-      }
-    }
-
     // Add all layers as DOM elements in reverse order (bottom to top)
     // Since we append in reverse order, the first layer (index 0, top) will be appended last and appear on top
     let layers = this.project.metadata.layers;
@@ -469,12 +493,49 @@ export class MainCanvasPanel extends EventEmitter {
     textarea.style.transform = `rotate(${layer.transform.rotation}deg) scale(${layer.transform.scaleX * this.scaleFactor}, ${layer.transform.scaleY * this.scaleFactor})`;
   }
 
+  private renderSelectionMask(): void {
+    // Make sure selection mask is on top
+    this.canvasContainer.appendChild(this.selectionMaskCanvas);
+    this.selectionMaskCanvas.width = this.canvas.width;
+    this.selectionMaskCanvas.height = this.canvas.height;
+
+    // Clear canvas
+    this.selectionMaskContext.clearRect(
+      0,
+      0,
+      this.selectionMaskCanvas.width,
+      this.selectionMaskCanvas.height,
+    );
+
+    if (!this.selectionMask.isEmpty()) {
+      const mask = this.selectionMask.mask;
+      const imageData = this.selectionMaskContext.createImageData(
+        mask.width,
+        mask.height,
+      );
+
+      // Draw dark overlay on non-selected areas (with feathering support)
+      for (let i = 0; i < mask.data.length; i += 4) {
+        const maskValue = mask.data[i]; // R channel indicates selection (0-255)
+        // Overlay opacity is inverse of mask value: 0 (fully selected) = transparent, 255 (not selected) = dark
+        const overlayOpacity = Math.round((255 - maskValue) / 2); // Max 50% opacity
+        imageData.data[i] = 0; // R
+        imageData.data[i + 1] = 0; // G
+        imageData.data[i + 2] = 0; // B
+        imageData.data[i + 3] = overlayOpacity; // A
+      }
+
+      this.selectionMaskContext.putImageData(imageData, 0, 0);
+    }
+  }
+
   public drawActiveLayerOutlineAndHandles(): void {
     this.drawActiveLayerOutline();
     this.freeTransformTool?.updateHandlePositions();
     this.textEditTool?.updateBorderAndHandlePositionsAndEditingStyle();
     this.cropTool?.updateOverlayAndHandles();
     this.resizeCanvasTool?.updateOverlayAndHandles();
+    this.rectangleMaskSelectionTool?.updateOverlay();
   }
 
   private drawActiveLayerOutline(): void {
@@ -613,7 +674,8 @@ export class MainCanvasPanel extends EventEmitter {
           (layerId) => this.project.layersToTextareas.get(layerId),
           (textarea, layer) => this.updateTextareaStyle(textarea, layer),
           () => this.drawActiveLayerOutline(),
-          (layers: Layer[], deltaX: number, deltaY: number) => this.emit("move", layers, deltaX, deltaY),
+          (layers: Layer[], deltaX: number, deltaY: number) =>
+            this.emit("move", layers, deltaX, deltaY),
           (message: string) => this.emit("warning", message),
         );
         this.selectPreviousTool = () => this.selectMoveTool();
@@ -709,6 +771,27 @@ export class MainCanvasPanel extends EventEmitter {
       () => {
         this.resizeCanvasTool.remove();
         this.resizeCanvasTool = undefined;
+      },
+    );
+  }
+
+  public selectRectangleMaskSelectionTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.rectangleMaskSelectionTool = new RectangleMaskSelectionTool(
+          this.outlineContainerParent,
+          this.canvasScrollContainer,
+          this.canvas,
+          () => this.scaleFactor,
+          (mask, mode) => {
+            this.emit("combineMaskSelection", mask, mode);
+          },
+        );
+        this.selectPreviousTool = () => this.selectRectangleMaskSelectionTool();
+      },
+      () => {
+        this.rectangleMaskSelectionTool.remove();
+        this.rectangleMaskSelectionTool = undefined;
       },
     );
   }

@@ -14,6 +14,10 @@ export class DarkTheme {
   public error1 = "rgb(255,59,48)";
   public error2 = "rgb(219,50,43)";
   public error3 = "rgb(186,33,39)";
+
+  public selectionMaskAdd = "#00ff00";
+  public selectionMaskSubtract = "#ff0000";
+  public selectionMaskIntersect = "#ffff00";
 }
 
 export let COLOR_THEME = new DarkTheme();

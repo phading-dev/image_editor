@@ -5,6 +5,8 @@ import { CommandHistoryManager } from "./command_history_manager";
 import { AddImageLayerCommand } from "./commands/add_image_layer_command";
 import { AddLayerCommand } from "./commands/add_layer_command";
 import { AddTextLayerCommand } from "./commands/add_text_layer_command";
+import { ClearSelectionMaskCommand } from "./commands/clear_selection_mask_command";
+import { CombineSelectionMaskCommand } from "./commands/combine_selection_mask_command";
 import { CropLayerCommand } from "./commands/crop_layer_command";
 import { DeleteLayerCommand } from "./commands/delete_layer_command";
 import { DuplicateLayerCommand } from "./commands/duplicate_layer_command";
@@ -29,6 +31,7 @@ import { ColorPickerPopup } from "./popup/color_picker_popup";
 import { SliderPopup } from "./popup/slider_popup";
 import { Project } from "./project";
 import { loadImage, saveToZip } from "./project_serializer";
+import { SelectionMask } from "./selection_mask";
 import { E } from "@selfage/element/factory";
 
 class ResizeHandle {
@@ -132,6 +135,7 @@ export class Editor {
   private readonly layersResizeHandle: ResizeHandle;
   private opacitySliderPopup?: SliderPopup;
   private colorPickerPopup?: ColorPickerPopup;
+  private selectionMask: SelectionMask;
 
   public constructor(
     private readonly createChatPanel: typeof ChatPanel.create,
@@ -145,8 +149,15 @@ export class Editor {
     private readonly project: Project,
     private readonly projectMetadataContent: string,
   ) {
+    this.selectionMask = new SelectionMask(
+      project.metadata.width,
+      project.metadata.height,
+    );
     this.chatPanel = this.createChatPanel(this.projectMetadataContent);
-    this.mainCanvasPanel = this.createMainCanvasPanel(this.project);
+    this.mainCanvasPanel = this.createMainCanvasPanel(
+      this.project,
+      this.selectionMask,
+    );
     this.layersPanel = this.createLayersPanel(this.project);
     this.commandHistoryManager = this.createCommandHistoryManager();
     this.chatResizeHandle = new ResizeHandle(
@@ -293,10 +304,21 @@ export class Editor {
         this.commandHistoryManager.pushCommand(
           new ResizeCanvasCommand(
             this.project,
+            this.selectionMask,
             newWidth,
             newHeight,
             deltaX,
             deltaY,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .on("combineMaskSelection", (mask, mode) => {
+        this.commandHistoryManager.pushCommand(
+          new CombineSelectionMaskCommand(
+            this.selectionMask,
+            mask,
+            mode,
             this.mainCanvasPanel,
           ),
         );
@@ -824,6 +846,17 @@ export class Editor {
           );
         },
       )
+      .setSelectRectangleMaskSelectionToolHandler(() => {
+        this.mainCanvasPanel.selectRectangleMaskSelectionTool();
+      })
+      .setClearSelectionMaskHandler(() => {
+        this.commandHistoryManager.pushCommand(
+          new ClearSelectionMaskCommand(
+            this.selectionMask,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
       .setSelectPaintToolHandler(() => {
         this.mainCanvasPanel.selectPaintTool();
       })
@@ -850,6 +883,7 @@ export class Editor {
           this.commandHistoryManager.pushCommand(
             new ResizeCanvasCommand(
               this.project,
+              this.selectionMask,
               finalWidth,
               finalHeight,
               finalDeltaX,

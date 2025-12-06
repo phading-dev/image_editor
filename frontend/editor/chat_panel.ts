@@ -602,6 +602,17 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setSelectRectangleMaskSelectionToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectRectangleMaskSelectionTool"] =
+      handler;
+    return this;
+  }
+
+  public setClearSelectionMaskHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["clearSelectionMask"] = handler;
+    return this;
+  }
+
   public setSelectPaintToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectPaintTool"] = handler;
     return this;
@@ -791,7 +802,8 @@ export class ChatPanel extends EventEmitter {
                 },
                 {
                   name: "duplicateActiveLayer",
-                  description: "Duplicate the currently active layer. The duplicated layer will be placed at the top of the layer stack with a copy of all properties and content.",
+                  description:
+                    "Duplicate the currently active layer. The duplicated layer will be placed at the top of the layer stack with a copy of all properties and content.",
                 },
                 {
                   name: "getActiveLayerInfo",
@@ -1025,6 +1037,15 @@ export class ChatPanel extends EventEmitter {
                   },
                 },
                 {
+                  name: "selectRectangleMaskSelectionTool",
+                  description:
+                    "Switch to the rectangle mask selection tool to create rectangular selections on the canvas. Hold Shift to add to selection, Ctrl to subtract from selection, and Shift+Ctrl to intersect with selection. The selection will be shown with a dark overlay on non-selected areas.",
+                },
+                {
+                  name: "clearSelectionMask",
+                  description: "Clear the current selection mask.",
+                },
+                {
                   name: "selectPaintTool",
                   description:
                     "Switch to the paint/brush tool for drawing on the active layer.",
@@ -1082,7 +1103,8 @@ export class ChatPanel extends EventEmitter {
                       },
                       fontFamily: {
                         type: "string",
-                        description: "The font family (e.g., Arial, Times New Roman).",
+                        description:
+                          "The font family (e.g., Arial, Times New Roman).",
                       },
                       fontSize: {
                         type: "number",
@@ -1090,7 +1112,8 @@ export class ChatPanel extends EventEmitter {
                       },
                       fontWeight: {
                         type: "string",
-                        description: "The font weight (e.g., normal, bold, or numeric 100-900).",
+                        description:
+                          "The font weight (e.g., normal, bold, or numeric 100-900).",
                       },
                       fontStyle: {
                         type: "string",
@@ -1098,11 +1121,13 @@ export class ChatPanel extends EventEmitter {
                       },
                       color: {
                         type: "string",
-                        description: "The text color in hex format (e.g., #000000).",
+                        description:
+                          "The text color in hex format (e.g., #000000).",
                       },
                       textAlign: {
                         type: "string",
-                        description: "The text alignment (left, center, or right).",
+                        description:
+                          "The text alignment (left, center, or right).",
                       },
                       lineHeight: {
                         type: "number",
@@ -1474,6 +1499,22 @@ export class ChatPanel extends EventEmitter {
               "selectCropTool",
               {},
               this.registeredFunctionHandlers["selectCropTool"],
+            );
+            return true;
+          case "selectRectangleMaskSelectionTool":
+            await this.toolCall(
+              "selectRectangleMaskSelectionTool",
+              {},
+              this.registeredFunctionHandlers[
+              "selectRectangleMaskSelectionTool"
+              ],
+            );
+            return true;
+          case "clearSelectionMask":
+            await this.toolCall(
+              "clearSelectionMask",
+              {},
+              this.registeredFunctionHandlers["clearSelectionMask"],
             );
             return true;
           case "cropActiveLayer":
