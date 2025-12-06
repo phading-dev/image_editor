@@ -132,8 +132,7 @@ export class LassoMaskSelectionTool {
   private createMaskFromPolygon(): ImageData {
     const mask = new ImageData(this.canvas.width, this.canvas.height);
 
-    // Use scanline fill algorithm to fill the polygon
-    // First, find the bounding box
+    // Find bounding box with 1px padding for anti-aliasing
     let minX = Infinity,
       maxX = -Infinity,
       minY = Infinity,
@@ -145,51 +144,90 @@ export class LassoMaskSelectionTool {
       maxY = Math.max(maxY, point.y);
     }
 
-    // Clamp to canvas bounds
-    minX = Math.max(0, Math.floor(minX));
-    maxX = Math.min(this.canvas.width - 1, Math.ceil(maxX));
-    minY = Math.max(0, Math.floor(minY));
-    maxY = Math.min(this.canvas.height - 1, Math.ceil(maxY));
+    // Expand by 1 pixel for anti-aliasing and clamp to canvas bounds
+    minX = Math.max(0, Math.floor(minX) - 1);
+    maxX = Math.min(this.canvas.width - 1, Math.ceil(maxX) + 1);
+    minY = Math.max(0, Math.floor(minY) - 1);
+    maxY = Math.min(this.canvas.height - 1, Math.ceil(maxY) + 1);
 
-    // For each scanline, find intersections with polygon edges
+    // For each pixel in the bounding box, compute signed distance
     for (let y = minY; y <= maxY; y++) {
-      const intersections: number[] = [];
+      for (let x = minX; x <= maxX; x++) {
+        const dist = this.signedDistanceToPolygon(x, y);
 
-      // Check each edge of the polygon
-      for (let i = 0; i < this.points.length; i++) {
-        const p1 = this.points[i];
-        const p2 = this.points[(i + 1) % this.points.length];
+        // Apply anti-aliasing: dist > 0 means inside, dist < 0 means outside
+        // Use 0.5 pixel range for smooth edge
+        const alpha = Math.max(0, Math.min(1, dist + 0.5));
 
-        // Check if this edge crosses the scanline
-        if ((p1.y <= y && p2.y > y) || (p2.y <= y && p1.y > y)) {
-          // Calculate x intersection
-          const x = p1.x + ((y - p1.y) / (p2.y - p1.y)) * (p2.x - p1.x);
-          intersections.push(x);
-        }
-      }
-
-      // Sort intersections
-      intersections.sort((a, b) => a - b);
-
-      // Fill between pairs of intersections
-      for (let i = 0; i < intersections.length - 1; i += 2) {
-        const startX = Math.max(0, Math.ceil(intersections[i]));
-        const endX = Math.min(
-          this.canvas.width - 1,
-          Math.floor(intersections[i + 1]),
-        );
-
-        for (let x = startX; x <= endX; x++) {
+        if (alpha > 0) {
           const index = (y * mask.width + x) * 4;
-          mask.data[index] = 255; // R
-          mask.data[index + 1] = 255; // G
-          mask.data[index + 2] = 255; // B
+          const intensity = Math.round(alpha * 255);
+          mask.data[index] = intensity; // R
+          mask.data[index + 1] = intensity; // G
+          mask.data[index + 2] = intensity; // B
           mask.data[index + 3] = 255; // A
         }
       }
     }
 
     return mask;
+  }
+
+  private signedDistanceToPolygon(px: number, py: number): number {
+    // Compute minimum distance to any edge
+    let minDist = Infinity;
+    for (let i = 0; i < this.points.length; i++) {
+      const p1 = this.points[i];
+      const p2 = this.points[(i + 1) % this.points.length];
+      const dist = this.distanceToSegment(px, py, p1.x, p1.y, p2.x, p2.y);
+      minDist = Math.min(minDist, dist);
+    }
+
+    // Determine if point is inside polygon using ray casting
+    const inside = this.isPointInPolygon(px, py);
+
+    return inside ? minDist : -minDist;
+  }
+
+  private distanceToSegment(
+    px: number,
+    py: number,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+  ): number {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lengthSq = dx * dx + dy * dy;
+
+    if (lengthSq === 0) {
+      // Segment is a point
+      return Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+    }
+
+    // Project point onto line, clamped to segment
+    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lengthSq));
+    const projX = x1 + t * dx;
+    const projY = y1 + t * dy;
+
+    return Math.sqrt((px - projX) * (px - projX) + (py - projY) * (py - projY));
+  }
+
+  private isPointInPolygon(px: number, py: number): boolean {
+    // Ray casting algorithm
+    let inside = false;
+    for (let i = 0, j = this.points.length - 1; i < this.points.length; j = i++) {
+      const xi = this.points[i].x;
+      const yi = this.points[i].y;
+      const xj = this.points[j].x;
+      const yj = this.points[j].y;
+
+      if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
+        inside = !inside;
+      }
+    }
+    return inside;
   }
 
   public updateOverlay(): void {
