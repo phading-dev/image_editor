@@ -10,7 +10,9 @@ export class SetLayerOpacityCommand implements Command {
     private newOpacity: number,
     private layersPanel: LayersPanel,
     private mainCanvasPanel: MainCanvasPanel,
-  ) {}
+  ) {
+    this.newOpacity = Math.round(Math.max(0, Math.min(100, this.newOpacity)));
+  }
 
   public do(): void {
     this.layer.opacity = this.newOpacity;

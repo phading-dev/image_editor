@@ -1050,9 +1050,9 @@ export class Editor {
           const baseShadow = oldShadow || defaultShadow;
           const newShadow = {
             color: shadow.color ?? baseShadow.color,
-            blur: shadow.blur ?? baseShadow.blur,
-            offsetX: shadow.offsetX ?? baseShadow.offsetX,
-            offsetY: shadow.offsetY ?? baseShadow.offsetY,
+            blur: shadow.blur ?? Math.round(baseShadow.blur * 100) / 100,
+            offsetX: shadow.offsetX ?? Math.round(baseShadow.offsetX * 100) / 100,
+            offsetY: shadow.offsetY ?? Math.round(baseShadow.offsetY * 100) / 100,
           };
           this.commandHistoryManager.pushCommand(
             new UpdateLayerShadowCommand(
