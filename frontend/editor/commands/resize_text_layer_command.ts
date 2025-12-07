@@ -14,7 +14,12 @@ export class ResizeTextLayerCommand implements Command {
     private readonly newX: number,
     private readonly newY: number,
     private readonly mainCanvasPanel: MainCanvasPanel,
-  ) { }
+  ) {
+    this.newWidth = Math.round(newWidth);
+    this.newHeight = Math.round(newHeight);
+    this.newX = Math.round(newX * 100) / 100;
+    this.newY = Math.round(newY * 100) / 100;
+  }
 
   public do(): void {
     this.layer.width = this.newWidth;

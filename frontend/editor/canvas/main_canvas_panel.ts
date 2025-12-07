@@ -3,9 +3,9 @@ import { COLOR_THEME } from "../../color_theme";
 import { FONT_S } from "../../sizes";
 import { Project } from "../project";
 import { Layer, Transform } from "../project_metadata";
+import { rasterizeLayerToContext } from "../layer_rasterizer";
 import { SelectionMask } from "../selection_mask";
 import { SelectionMode } from "../selection_mask_utils";
-import { rasterizeTextLayer } from "../text_rasterizer";
 import { CropTool } from "./crop_tool";
 import { FreeTransformTool } from "./free_transform_tool";
 import { LassoMaskSelectionTool } from "./lasso_mask_selection_tool";
@@ -443,10 +443,10 @@ export class MainCanvasPanel extends EventEmitter {
   ): void {
     // Position and styling
     canvas.style.position = "absolute";
-    canvas.style.left = `${layer.transform.translateX * this.scaleFactor}px`;
-    canvas.style.top = `${layer.transform.translateY * this.scaleFactor}px`;
+    canvas.style.left = "0";
+    canvas.style.top = "0";
     canvas.style.transformOrigin = "0 0";
-    canvas.style.transform = `rotate(${layer.transform.rotation}deg) scale(${layer.transform.scaleX * this.scaleFactor}, ${layer.transform.scaleY * this.scaleFactor})`;
+    canvas.style.transform = `translate(${layer.transform.translateX * this.scaleFactor}px, ${layer.transform.translateY * this.scaleFactor}px) rotate(${layer.transform.rotation}deg) scale(${layer.transform.scaleX * this.scaleFactor}, ${layer.transform.scaleY * this.scaleFactor})`;
     canvas.style.opacity = `${layer.opacity / 100}`;
     canvas.style.pointerEvents = "none";
     if (layer.shadow) {
@@ -493,10 +493,10 @@ export class MainCanvasPanel extends EventEmitter {
     textarea.readOnly = true;
 
     // Position and transforms
-    textarea.style.left = `${layer.transform.translateX * this.scaleFactor}px`;
-    textarea.style.top = `${layer.transform.translateY * this.scaleFactor}px`;
+    textarea.style.left = `0`;
+    textarea.style.top = `0`;
     textarea.style.transformOrigin = "0 0";
-    textarea.style.transform = `rotate(${layer.transform.rotation}deg) scale(${layer.transform.scaleX * this.scaleFactor}, ${layer.transform.scaleY * this.scaleFactor})`;
+    textarea.style.transform = `translate(${layer.transform.translateX * this.scaleFactor}px, ${layer.transform.translateY * this.scaleFactor}px) rotate(${layer.transform.rotation}deg) scale(${layer.transform.scaleX * this.scaleFactor}, ${layer.transform.scaleY * this.scaleFactor})`;
   }
 
   private renderSelectionMask(): void {
@@ -977,24 +977,8 @@ export class MainCanvasPanel extends EventEmitter {
       if (layer.visible === false) {
         continue;
       }
-      let layerCanvas = layer.basicText
-        ? rasterizeTextLayer(layer)
-        : this.project.layersToCanvas.get(layer.id);
-      let opacity = Math.max(0, Math.min(1, layer.opacity / 100));
-      context.save();
-      context.globalAlpha = opacity;
-      context.translate(layer.transform.translateX, layer.transform.translateY);
-      // Rotate around the top-left corner to stay consistent with translation.
-      context.rotate((layer.transform.rotation * Math.PI) / 180);
-      context.scale(layer.transform.scaleX, layer.transform.scaleY);
-      if (layer.shadow) {
-        context.shadowColor = layer.shadow.color;
-        context.shadowBlur = layer.shadow.blur;
-        context.shadowOffsetX = layer.shadow.offsetX;
-        context.shadowOffsetY = layer.shadow.offsetY;
-      }
-      context.drawImage(layerCanvas, 0, 0);
-      context.restore();
+      let layerCanvas = this.project.layersToCanvas.get(layer.id);
+      rasterizeLayerToContext(context, layer, layerCanvas);
     }
   }
 

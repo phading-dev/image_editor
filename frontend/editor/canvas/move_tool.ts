@@ -91,8 +91,8 @@ export class MoveTool {
     }
     this.layers.forEach((layer, index) => {
       const initial = this.initialTransforms![index];
-      layer.transform.translateX = initial.x + deltaX;
-      layer.transform.translateY = initial.y + deltaY;
+      layer.transform.translateX = Math.round((initial.x + deltaX) * 100) / 100;
+      layer.transform.translateY = Math.round((initial.y + deltaY) * 100) / 100;
     });
 
     // Update layer visuals directly without rerendering everything

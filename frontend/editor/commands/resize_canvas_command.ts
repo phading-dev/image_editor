@@ -22,12 +22,16 @@ export class ResizeCanvasCommand implements Command {
     this.oldWidth = project.metadata.width;
     this.oldHeight = project.metadata.height;
     this.oldMask = copyImageData(this.selectionMask.mask);
+    this.newWidth = Math.round(newWidth);
+    this.newHeight = Math.round(newHeight);
+    this.deltaX = Math.round(deltaX * 100) / 100;
+    this.deltaY = Math.round(deltaY * 100) / 100;
     this.newMask = this.createResizedMask(
       this.selectionMask.mask,
-      newWidth,
-      newHeight,
-      -deltaX,
-      -deltaY,
+      this.newWidth,
+      this.newHeight,
+      -this.deltaX,
+      -this.deltaY,
     );
   }
 

@@ -8,7 +8,10 @@ export class MoveLayersCommand implements Command {
     private deltaX: number,
     private deltaY: number,
     private mainCanvasPanel: MainCanvasPanel,
-  ) { }
+  ) {
+    this.deltaX = Math.round(deltaX * 100) / 100;
+    this.deltaY = Math.round(deltaY * 100) / 100;
+  }
 
   public do(): void {
     this.layers.forEach((layer) => {

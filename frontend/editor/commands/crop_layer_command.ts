@@ -24,6 +24,10 @@ export class CropLayerCommand implements Command {
     this.oldTransform = { ...layer.transform };
     this.oldWidth = layer.width;
     this.oldHeight = layer.height;
+    this.cropRect.x = Math.round(cropRect.x * 100) / 100;
+    this.cropRect.y = Math.round(cropRect.y * 100) / 100;
+    this.cropRect.width = Math.round(cropRect.width);
+    this.cropRect.height = Math.round(cropRect.height);
 
     // 1. Create new canvas
     this.newLayerCanvas = document.createElement("canvas");

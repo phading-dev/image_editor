@@ -29,12 +29,14 @@ import { TransformLayerCommand } from "./commands/transform_layer_command";
 import { UnlockLayersCommand } from "./commands/unlock_layers_command";
 import { UpdateBasicTextCommand } from "./commands/update_basic_text_command";
 import { UpdateLayerShadowCommand } from "./commands/update_layer_shadow_command";
+import { rasterizeLayerToCanvas } from "./layer_rasterizer";
 import { LayersPanel } from "./layers_panel";
 import { ColorPickerPopup } from "./popup/color_picker_popup";
 import { SliderPopup } from "./popup/slider_popup";
 import { Project } from "./project";
 import { loadImage, saveToZip } from "./project_serializer";
 import { SelectionMask } from "./selection_mask";
+import { SelectionMode } from "./selection_mask_utils";
 import { E } from "@selfage/element/factory";
 
 class ResizeHandle {
@@ -308,10 +310,10 @@ export class Editor {
           new ResizeCanvasCommand(
             this.project,
             this.selectionMask,
-            Math.round(newWidth),
-            Math.round(newHeight),
-            Math.round(deltaX),
-            Math.round(deltaY),
+            newWidth,
+            newHeight,
+            deltaX,
+            deltaY,
             this.mainCanvasPanel,
           ),
         );
@@ -346,10 +348,10 @@ export class Editor {
               oldHeight,
               oldX,
               oldY,
-              Math.round(newWidth),
-              Math.round(newHeight),
-              Math.round(newX),
-              Math.round(newY),
+              newWidth,
+              newHeight,
+              newX,
+              newY,
               this.mainCanvasPanel,
             ),
           );
@@ -842,12 +844,7 @@ export class Editor {
           this.commandHistoryManager.pushCommand(
             new CropLayerCommand(
               layer,
-              {
-                x: Math.round(cropRect.x),
-                y: Math.round(cropRect.y),
-                width: Math.round(cropRect.width),
-                height: Math.round(cropRect.height),
-              },
+              cropRect,
               this.mainCanvasPanel,
               this.project.layersToCanvas,
             ),
@@ -900,6 +897,61 @@ export class Editor {
           ),
         );
       })
+      .setAlphaToMaskHandler((mode?: string) => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        const layerCanvas = this.project.layersToCanvas.get(layer.id);
+        // Rasterize the layer with all transforms, opacity, and shadow
+        const tempCanvas = rasterizeLayerToCanvas(
+          layer,
+          layerCanvas,
+          this.project.metadata.width,
+          this.project.metadata.height,
+        );
+        const tempCtx = tempCanvas.getContext("2d");
+        // Extract alpha channel from rasterized result
+        const imageData = tempCtx.getImageData(
+          0,
+          0,
+          tempCanvas.width,
+          tempCanvas.height,
+        );
+        const mask = new ImageData(tempCanvas.width, tempCanvas.height);
+        for (let i = 0; i < imageData.data.length; i += 4) {
+          const alpha = imageData.data[i + 3];
+          mask.data[i] = alpha; // R
+          mask.data[i + 1] = alpha; // G
+          mask.data[i + 2] = alpha; // B
+          mask.data[i + 3] = 255; // A
+        }
+        // Parse selection mode
+        let selectionMode: SelectionMode;
+        switch (mode) {
+          case "add":
+            selectionMode = SelectionMode.ADD;
+            break;
+          case "subtract":
+            selectionMode = SelectionMode.SUBTRACT;
+            break;
+          case "intersect":
+            selectionMode = SelectionMode.INTERSECT;
+            break;
+          default:
+            selectionMode = SelectionMode.REPLACE;
+        }
+        this.commandHistoryManager.pushCommand(
+          new CombineSelectionMaskCommand(
+            this.selectionMask,
+            mask,
+            selectionMode,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
       .setSelectPaintToolHandler(() => {
         this.mainCanvasPanel.selectPaintTool();
       })
@@ -927,10 +979,10 @@ export class Editor {
             new ResizeCanvasCommand(
               this.project,
               this.selectionMask,
-              Math.round(finalWidth),
-              Math.round(finalHeight),
-              Math.round(finalDeltaX),
-              Math.round(finalDeltaY),
+              finalWidth,
+              finalHeight,
+              finalDeltaX,
+              finalDeltaY,
               this.mainCanvasPanel,
             ),
           );

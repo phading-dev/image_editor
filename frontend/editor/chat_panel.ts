@@ -646,6 +646,11 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setAlphaToMaskHandler(handler: (mode?: string) => void): this {
+    this.registeredFunctionHandlers["alphaToMask"] = handler;
+    return this;
+  }
+
   public setSelectPaintToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectPaintTool"] = handler;
     return this;
@@ -1126,6 +1131,22 @@ export class ChatPanel extends EventEmitter {
                       },
                     },
                     required: ["radius"],
+                  },
+                },
+                {
+                  name: "alphaToMask",
+                  description:
+                    "Convert the alpha channel (transparency) of the active layer to a selection mask. Fully opaque pixels become fully selected, transparent pixels become unselected, and semi-transparent pixels become partially selected.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      mode: {
+                        type: "string",
+                        enum: ["replace", "add", "subtract", "intersect"],
+                        description:
+                          "How to combine with existing selection: 'replace' (default) replaces the current selection, 'add' adds to it, 'subtract' removes from it, 'intersect' keeps only the overlap.",
+                      },
+                    },
                   },
                 },
                 {
@@ -1654,6 +1675,17 @@ export class ChatPanel extends EventEmitter {
                 }
                 this.registeredFunctionHandlers["growShrinkSelectionMask"](
                   functionCall.args.radius,
+                );
+              },
+            );
+            return true;
+          case "alphaToMask":
+            await this.toolCall(
+              "alphaToMask",
+              functionCall.args,
+              () => {
+                this.registeredFunctionHandlers["alphaToMask"](
+                  functionCall.args?.mode,
                 );
               },
             );

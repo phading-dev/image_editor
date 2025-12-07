@@ -240,9 +240,9 @@ export class FreeTransformTool {
       }
     }
     this.layer!.transform.translateX =
-      this.initialTransform!.translateX + deltaX;
+      Math.round((this.initialTransform!.translateX + deltaX) * 100) / 100;
     this.layer!.transform.translateY =
-      this.initialTransform!.translateY + deltaY;
+      Math.round((this.initialTransform!.translateY + deltaY) * 100) / 100;
   }
 
   private handlePivotMove(deltaX: number, deltaY: number): void {
@@ -331,8 +331,8 @@ export class FreeTransformTool {
 
     // Round translation values to prevent sub-pixel drift
     // Use 2 decimal places for translation (0.01 pixel precision)
-    layer.transform.translateX = pivotX - newPivotOffsetX;
-    layer.transform.translateY = pivotY - newPivotOffsetY;
+    layer.transform.translateX = Math.round((pivotX - newPivotOffsetX) * 100) / 100;
+    layer.transform.translateY = Math.round((pivotY - newPivotOffsetY) * 100) / 100;
   }
 
   private handleResize(
@@ -403,10 +403,11 @@ export class FreeTransformTool {
     const worldOffsetX = newLocalLeft * cosRot - newLocalTop * sinRot;
     const worldOffsetY = newLocalLeft * sinRot + newLocalTop * cosRot;
 
-    layer.transform.translateX = initial.translateX + worldOffsetX;
-    layer.transform.translateY = initial.translateY + worldOffsetY;
-    layer.transform.scaleX = newWidth / layer.width;
-    layer.transform.scaleY = newHeight / layer.height;
+    // Round all transform values to 2 decimal places
+    layer.transform.translateX = Math.round((initial.translateX + worldOffsetX) * 100) / 100;
+    layer.transform.translateY = Math.round((initial.translateY + worldOffsetY) * 100) / 100;
+    layer.transform.scaleX = Math.round((newWidth / layer.width) * 100) / 100;
+    layer.transform.scaleY = Math.round((newHeight / layer.height) * 100) / 100;
   }
 
   public updateHandlePositions(): void {
