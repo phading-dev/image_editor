@@ -26,6 +26,7 @@ export class LayerRow extends EventEmitter {
   public id: string;
   public element: HTMLDivElement;
   private nameSpan: HTMLSpanElement;
+  private typeSpan: HTMLSpanElement;
   private visibleSpan: HTMLSpanElement;
   private opacitySpan: HTMLSpanElement;
   private lockedSpan: HTMLSpanElement;
@@ -35,6 +36,7 @@ export class LayerRow extends EventEmitter {
     this.id = layer.id;
 
     let nameSpanRef = new Ref<HTMLSpanElement>();
+    let typeSpanRef = new Ref<HTMLSpanElement>();
     let visibleSpanRef = new Ref<HTMLSpanElement>();
     let opacitySpanRef = new Ref<HTMLSpanElement>();
     let lockedSpanRef = new Ref<HTMLSpanElement>();
@@ -68,6 +70,17 @@ export class LayerRow extends EventEmitter {
             "overflow:hidden",
             "text-overflow:ellipsis",
             "flex:1",
+          ].join(";"),
+        }),
+        E.span({
+          ref: typeSpanRef,
+          style: [
+            `font-size:${FONT_S * 0.85}rem`,
+            `background:${COLOR_THEME.accent3}`,
+            `color:${COLOR_THEME.neutral0}`,
+            "padding:0.125rem 0.375rem",
+            "border-radius:0.375rem",
+            "white-space:nowrap",
           ].join(";"),
         }),
       ),
@@ -117,6 +130,7 @@ export class LayerRow extends EventEmitter {
       ),
     );
     this.nameSpan = nameSpanRef.val;
+    this.typeSpan = typeSpanRef.val;
     this.visibleSpan = visibleSpanRef.val;
     this.opacitySpan = opacitySpanRef.val;
     this.lockedSpan = lockedSpanRef.val;
@@ -154,6 +168,12 @@ export class LayerRow extends EventEmitter {
 
   public rerender(): void {
     this.nameSpan.textContent = this.layer.name;
+    if (this.layer.basicText) {
+      this.typeSpan.textContent = "Text";
+      this.typeSpan.style.display = "";
+    } else {
+      this.typeSpan.style.display = "none";
+    }
     this.visibleSpan.textContent = this.layer.visible ? "Visible" : "Hidden";
     this.opacitySpan.textContent = `${Math.round(this.layer.opacity)}%`;
     this.lockedSpan.textContent = this.layer.locked ? "Locked" : "Unlocked";

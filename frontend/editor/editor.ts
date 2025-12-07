@@ -1043,6 +1043,7 @@ export class Editor {
             this.project,
             layer,
             this.mainCanvasPanel,
+            this.layersPanel,
           ),
         );
       })
