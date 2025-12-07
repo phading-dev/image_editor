@@ -185,10 +185,34 @@ export let PAINT_TOOL_SETTINGS: MessageDescriptor<PaintToolSettings> = {
   }],
 };
 
+export interface FuzzyMaskSelectionToolSettings {
+  tolerance?: number,
+  contiguous?: boolean,
+  sampleAllLayers?: boolean,
+}
+
+export let FUZZY_MASK_SELECTION_TOOL_SETTINGS: MessageDescriptor<FuzzyMaskSelectionToolSettings> = {
+  name: 'FuzzyMaskSelectionToolSettings',
+  fields: [{
+    name: 'tolerance',
+    index: 1,
+    primitiveType: PrimitiveType.NUMBER,
+  }, {
+    name: 'contiguous',
+    index: 2,
+    primitiveType: PrimitiveType.BOOLEAN,
+  }, {
+    name: 'sampleAllLayers',
+    index: 3,
+    primitiveType: PrimitiveType.BOOLEAN,
+  }],
+};
+
 export interface ProjectSettings {
   foregroundColor?: string,
   backgroundColor?: string,
   paintToolSettings?: PaintToolSettings,
+  fuzzyMaskSelectionToolSettings?: FuzzyMaskSelectionToolSettings,
 }
 
 export let PROJECT_SETTINGS: MessageDescriptor<ProjectSettings> = {
@@ -205,6 +229,10 @@ export let PROJECT_SETTINGS: MessageDescriptor<ProjectSettings> = {
     name: 'paintToolSettings',
     index: 3,
     messageType: PAINT_TOOL_SETTINGS,
+  }, {
+    name: 'fuzzyMaskSelectionToolSettings',
+    index: 4,
+    messageType: FUZZY_MASK_SELECTION_TOOL_SETTINGS,
   }],
 };
 

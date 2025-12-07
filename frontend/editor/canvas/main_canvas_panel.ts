@@ -1,19 +1,23 @@
 import EventEmitter = require("events");
 import { COLOR_THEME } from "../../color_theme";
 import { FONT_S } from "../../sizes";
+import {
+  rasterizeLayerToCanvas,
+  rasterizeLayerToContext,
+} from "../layer_rasterizer";
 import { Project } from "../project";
 import { Layer, Transform } from "../project_metadata";
-import { rasterizeLayerToContext } from "../layer_rasterizer";
 import { SelectionMask } from "../selection_mask";
 import { SelectionMode } from "../selection_mask_utils";
 import { CropTool } from "./crop_tool";
 import { FreeTransformTool } from "./free_transform_tool";
+import { FuzzyMaskSelectionTool } from "./fuzzy_mask_selection_tool";
 import { LassoMaskSelectionTool } from "./lasso_mask_selection_tool";
 import { MoveTool } from "./move_tool";
 import { OvalMaskSelectionTool } from "./oval_mask_selection_tool";
-import { PolygonalMaskSelectionTool } from "./polygonal_mask_selection_tool";
 import { PaintTool } from "./paint_tool";
 import { PanTool } from "./pan_tool";
+import { PolygonalMaskSelectionTool } from "./polygonal_mask_selection_tool";
 import { RectangleMaskSelectionTool } from "./rectangle_mask_selection_tool";
 import { ResizeCanvasTool } from "./resize_canvas_tool";
 import { SelectTool } from "./select_tool";
@@ -123,6 +127,7 @@ export class MainCanvasPanel extends EventEmitter {
   private ovalMaskSelectionTool: OvalMaskSelectionTool;
   private lassoMaskSelectionTool: LassoMaskSelectionTool;
   private polygonalMaskSelectionTool: PolygonalMaskSelectionTool;
+  private fuzzyMaskSelectionTool: FuzzyMaskSelectionTool;
   private toolSwitch = new TabsSwitcher();
   private selectPreviousTool: () => void;
   private resizeObserver: ResizeObserver;
@@ -211,6 +216,7 @@ export class MainCanvasPanel extends EventEmitter {
                 "top: 0",
                 "width: 100%",
                 "height: 100%",
+                "pointer-events: none",
               ].join("; "),
             }),
           ),
@@ -382,7 +388,7 @@ export class MainCanvasPanel extends EventEmitter {
   public rerender(): void {
     this.canvasContainer.style.width = `${this.project.metadata.width * this.scaleFactor}px`;
     this.canvasContainer.style.height = `${this.project.metadata.height * this.scaleFactor}px`;
-    while (this.canvasContainer.lastChild && this.canvasContainer.lastChild !== this.canvas) {
+    while (this.canvasContainer.lastChild) {
       this.canvasContainer.removeChild(this.canvasContainer.lastChild);
     }
     // Draw checkerboard pattern to indicate transparency
@@ -655,7 +661,7 @@ export class MainCanvasPanel extends EventEmitter {
       () => {
         this.paintTool = new PaintTool(
           this.canvas,
-          this.project.metadata,
+          this.project.metadata.settings,
           () => this.getActiveLayer(),
           () => this.getActiveLayerContext(),
           (context, oldImageData, newImageData) =>
@@ -868,6 +874,30 @@ export class MainCanvasPanel extends EventEmitter {
     );
   }
 
+  public selectFuzzyMaskSelectionTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.fuzzyMaskSelectionTool = new FuzzyMaskSelectionTool(
+          this.outlineContainerParent,
+          this.canvasScrollContainer,
+          this.canvas,
+          () => this.scaleFactor,
+          this.project.metadata.settings,
+          () => this.getRasterizedImageData(),
+          () => this.getActiveLayerImageData(),
+          (mask, mode) => {
+            this.emit("combineMaskSelection", mask, mode);
+          },
+        );
+        this.selectPreviousTool = () => this.selectFuzzyMaskSelectionTool();
+      },
+      () => {
+        this.fuzzyMaskSelectionTool.remove();
+        this.fuzzyMaskSelectionTool = undefined;
+      },
+    );
+  }
+
   public selectPanTool(): void {
     this.toolSwitch.show(
       () => {
@@ -942,13 +972,7 @@ export class MainCanvasPanel extends EventEmitter {
     imageType: string,
     quality?: number,
   ): Promise<void> {
-    // Create a temporary canvas without the checkerboard
-    let tempCanvas = document.createElement("canvas");
-    tempCanvas.width = this.canvas.width;
-    tempCanvas.height = this.canvas.height;
-    let tempContext = tempCanvas.getContext("2d");
-    this.rasterizeLayers(tempContext);
-
+    let tempCanvas = this.rasterizeLayers();
     return new Promise((resolve, reject) => {
       tempCanvas.toBlob(
         (blob) => {
@@ -970,7 +994,11 @@ export class MainCanvasPanel extends EventEmitter {
     });
   }
 
-  private rasterizeLayers(context: CanvasRenderingContext2D): void {
+  private rasterizeLayers(): HTMLCanvasElement {
+    let tempCanvas = document.createElement("canvas");
+    tempCanvas.width = this.canvas.width;
+    tempCanvas.height = this.canvas.height;
+    let tempContext = tempCanvas.getContext("2d");
     let layers = this.project.metadata.layers;
     for (let index = layers.length - 1; index >= 0; index--) {
       let layer = layers[index];
@@ -978,8 +1006,32 @@ export class MainCanvasPanel extends EventEmitter {
         continue;
       }
       let layerCanvas = this.project.layersToCanvas.get(layer.id);
-      rasterizeLayerToContext(context, layer, layerCanvas);
+      rasterizeLayerToContext(tempContext, layer, layerCanvas);
     }
+    return tempCanvas;
+  }
+
+  private getRasterizedImageData(): ImageData {
+    const tempCanvas = this.rasterizeLayers();
+    return tempCanvas
+      .getContext("2d")
+      .getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+  }
+
+  private getActiveLayerImageData(): ImageData | undefined {
+    const activeLayer = this.getActiveLayer();
+    if (!activeLayer) {
+      return undefined;
+    }
+    const tempCanvas = rasterizeLayerToCanvas(
+      activeLayer,
+      this.project.layersToCanvas.get(activeLayer.id),
+      this.canvas.width,
+      this.canvas.height,
+    );
+    return tempCanvas
+      .getContext("2d")
+      .getImageData(0, 0, tempCanvas.width, tempCanvas.height);
   }
 
   public remove(): void {

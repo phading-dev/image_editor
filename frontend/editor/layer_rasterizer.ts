@@ -7,12 +7,12 @@ import { rasterizeTextLayer } from "./text_rasterizer";
  *
  * @param context - The 2D rendering context to draw onto
  * @param layer - The layer to rasterize
- * @param layerCanvas - The canvas containing the layer's image data (for non-text layers)
+ * @param layerCanvas - The canvas containing the layer's image data (undefined for text layers)
  */
 export function rasterizeLayerToContext(
   context: CanvasRenderingContext2D,
   layer: Layer,
-  layerCanvas: HTMLCanvasElement,
+  layerCanvas: HTMLCanvasElement | undefined,
 ): void {
   const sourceCanvas = layer.basicText ? rasterizeTextLayer(layer) : layerCanvas;
   const opacity = Math.max(0, Math.min(1, layer.opacity / 100));
@@ -36,14 +36,14 @@ export function rasterizeLayerToContext(
  * Rasterizes a single layer to a new canvas with all transforms, opacity, and shadow applied.
  *
  * @param layer - The layer to rasterize
- * @param layerCanvas - The canvas containing the layer's image data (for non-text layers)
+ * @param layerCanvas - The canvas containing the layer's image data (undefined for text layers)
  * @param canvasWidth - The width of the output canvas
  * @param canvasHeight - The height of the output canvas
  * @returns A new canvas with the rasterized layer
  */
 export function rasterizeLayerToCanvas(
   layer: Layer,
-  layerCanvas: HTMLCanvasElement,
+  layerCanvas: HTMLCanvasElement | undefined,
   canvasWidth: number,
   canvasHeight: number,
 ): HTMLCanvasElement {

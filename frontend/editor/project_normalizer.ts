@@ -45,5 +45,9 @@ export function normalizeProjectMetadata(
   projectMetadata.settings.backgroundColor ??= "#FFFFFF";
   projectMetadata.settings.paintToolSettings ??= {};
   projectMetadata.settings.paintToolSettings.brushSize ??= 1;
+  projectMetadata.settings.fuzzyMaskSelectionToolSettings ??= {};
+  projectMetadata.settings.fuzzyMaskSelectionToolSettings.tolerance ??= 32;
+  projectMetadata.settings.fuzzyMaskSelectionToolSettings.contiguous ??= true;
+  projectMetadata.settings.fuzzyMaskSelectionToolSettings.sampleAllLayers ??= true;
   return projectMetadata;
 }

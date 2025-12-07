@@ -22,14 +22,14 @@ const DISPLAY_ROLES = ["user", "error", "warning", "modelResponse"];
 
 interface ChatMessage {
   role:
-  | "user"
-  | "error"
-  | "warning"
-  | "assistant"
-  | "system"
-  | "modelResponse"
-  | "functionCall"
-  | "functionResponse";
+    | "user"
+    | "error"
+    | "warning"
+    | "assistant"
+    | "system"
+    | "modelResponse"
+    | "functionCall"
+    | "functionResponse";
   parts: any[];
 }
 
@@ -624,6 +624,23 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setSelectFuzzyMaskSelectionToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectFuzzyMaskSelectionTool"] = handler;
+    return this;
+  }
+
+  public setUpdateFuzzyMaskSelectionToolSettingsHandler(
+    handler: (settings: {
+      tolerance?: number;
+      contiguous?: boolean;
+      sampleAllLayers?: boolean;
+    }) => void,
+  ): this {
+    this.registeredFunctionHandlers["updateFuzzyMaskSelectionToolSettings"] =
+      handler;
+    return this;
+  }
+
   public setClearSelectionMaskHandler(handler: () => void): this {
     this.registeredFunctionHandlers["clearSelectionMask"] = handler;
     return this;
@@ -634,7 +651,9 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
-  public setFeatherSelectionMaskHandler(handler: (radius: number) => void): this {
+  public setFeatherSelectionMaskHandler(
+    handler: (radius: number) => void,
+  ): this {
     this.registeredFunctionHandlers["featherSelectionMask"] = handler;
     return this;
   }
@@ -653,6 +672,13 @@ export class ChatPanel extends EventEmitter {
 
   public setSelectPaintToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectPaintTool"] = handler;
+    return this;
+  }
+
+  public setUpdatePaintToolSettingsHandler(
+    handler: (settings: { brushSize?: number }) => void,
+  ): this {
+    this.registeredFunctionHandlers["updatePaintToolSettings"] = handler;
     return this;
   }
 
@@ -1096,6 +1122,36 @@ export class ChatPanel extends EventEmitter {
                     "Switch to the polygonal mask selection tool to create polygon selections by clicking to place vertices. Click near the start point or double-click to close the polygon. Press Backspace to remove the last vertex. Hold Shift to add to selection, Ctrl to subtract from selection, and Shift+Ctrl to intersect with selection. The selection will be shown with a dark overlay on non-selected areas.",
                 },
                 {
+                  name: "selectFuzzyMaskSelectionTool",
+                  description:
+                    "Switch to the fuzzy/magic wand mask selection tool. Click on a pixel to select all connected pixels with similar colors within the tolerance threshold. Hold Shift to add to selection, Ctrl to subtract from selection, and Shift+Ctrl to intersect with selection. The selection will be shown with a dark overlay on non-selected areas.",
+                },
+                {
+                  name: "updateFuzzyMaskSelectionToolSettings",
+                  description:
+                    "Update the fuzzy/magic wand mask selection tool settings. All parameters are optional - if not provided, current values will be kept.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      tolerance: {
+                        type: "number",
+                        description:
+                          "The color tolerance threshold (0-255). Lower values select more similar colors, higher values select a wider range.",
+                      },
+                      contiguous: {
+                        type: "boolean",
+                        description:
+                          "If true, only selects connected pixels (flood fill). If false, selects all pixels with similar colors regardless of position.",
+                      },
+                      sampleAllLayers: {
+                        type: "boolean",
+                        description:
+                          "If true, samples colors from the composite of all visible layers. If false, samples only from the active layer.",
+                      },
+                    },
+                  },
+                },
+                {
                   name: "clearSelectionMask",
                   description: "Clear the current selection mask.",
                 },
@@ -1105,13 +1161,15 @@ export class ChatPanel extends EventEmitter {
                 },
                 {
                   name: "featherSelectionMask",
-                  description: "Feather the edges of the current selection mask.",
+                  description:
+                    "Feather the edges of the current selection mask.",
                   parameters: {
                     type: "object",
                     properties: {
                       radius: {
                         type: "number",
-                        description: "The radius of the feather blur in pixels.",
+                        description:
+                          "The radius of the feather blur in pixels.",
                       },
                     },
                     required: ["radius"],
@@ -1153,6 +1211,20 @@ export class ChatPanel extends EventEmitter {
                   name: "selectPaintTool",
                   description:
                     "Switch to the paint/brush tool for drawing on the active layer.",
+                },
+                {
+                  name: "updatePaintToolSettings",
+                  description:
+                    "Update the paint/brush tool settings. All parameters are optional - if not provided, current values will be kept.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      brushSize: {
+                        type: "number",
+                        description: "The brush size in pixels.",
+                      },
+                    },
+                  },
                 },
                 {
                   name: "selectResizeCanvasTool",
@@ -1610,7 +1682,7 @@ export class ChatPanel extends EventEmitter {
               "selectRectangleMaskSelectionTool",
               {},
               this.registeredFunctionHandlers[
-              "selectRectangleMaskSelectionTool"
+                "selectRectangleMaskSelectionTool"
               ],
             );
             return true;
@@ -1618,18 +1690,14 @@ export class ChatPanel extends EventEmitter {
             await this.toolCall(
               "selectOvalMaskSelectionTool",
               {},
-              this.registeredFunctionHandlers[
-              "selectOvalMaskSelectionTool"
-              ],
+              this.registeredFunctionHandlers["selectOvalMaskSelectionTool"],
             );
             return true;
           case "selectLassoMaskSelectionTool":
             await this.toolCall(
               "selectLassoMaskSelectionTool",
               {},
-              this.registeredFunctionHandlers[
-              "selectLassoMaskSelectionTool"
-              ],
+              this.registeredFunctionHandlers["selectLassoMaskSelectionTool"],
             );
             return true;
           case "selectPolygonalMaskSelectionTool":
@@ -1637,8 +1705,25 @@ export class ChatPanel extends EventEmitter {
               "selectPolygonalMaskSelectionTool",
               {},
               this.registeredFunctionHandlers[
-              "selectPolygonalMaskSelectionTool"
+                "selectPolygonalMaskSelectionTool"
               ],
+            );
+            return true;
+          case "selectFuzzyMaskSelectionTool":
+            await this.toolCall(
+              "selectFuzzyMaskSelectionTool",
+              {},
+              this.registeredFunctionHandlers["selectFuzzyMaskSelectionTool"],
+            );
+            return true;
+          case "updateFuzzyMaskSelectionToolSettings":
+            await this.toolCall(
+              "updateFuzzyMaskSelectionToolSettings",
+              functionCall.args,
+              () =>
+                this.registeredFunctionHandlers[
+                  "updateFuzzyMaskSelectionToolSettings"
+                ](functionCall.args || {}),
             );
             return true;
           case "clearSelectionMask":
@@ -1656,14 +1741,18 @@ export class ChatPanel extends EventEmitter {
             );
             return true;
           case "featherSelectionMask":
-            await this.toolCall("featherSelectionMask", functionCall.args, () => {
-              if (typeof functionCall.args?.radius !== "number") {
-                throw new Error("radius parameter is required.");
-              }
-              this.registeredFunctionHandlers["featherSelectionMask"](
-                functionCall.args.radius,
-              );
-            });
+            await this.toolCall(
+              "featherSelectionMask",
+              functionCall.args,
+              () => {
+                if (typeof functionCall.args?.radius !== "number") {
+                  throw new Error("radius parameter is required.");
+                }
+                this.registeredFunctionHandlers["featherSelectionMask"](
+                  functionCall.args.radius,
+                );
+              },
+            );
             return true;
           case "growShrinkSelectionMask":
             await this.toolCall(
@@ -1680,15 +1769,11 @@ export class ChatPanel extends EventEmitter {
             );
             return true;
           case "alphaToMask":
-            await this.toolCall(
-              "alphaToMask",
-              functionCall.args,
-              () => {
-                this.registeredFunctionHandlers["alphaToMask"](
-                  functionCall.args?.mode,
-                );
-              },
-            );
+            await this.toolCall("alphaToMask", functionCall.args, () => {
+              this.registeredFunctionHandlers["alphaToMask"](
+                functionCall.args?.mode,
+              );
+            });
             return true;
           case "cropActiveLayer":
             await this.toolCall("cropActiveLayer", functionCall.args, () =>
@@ -1702,6 +1787,16 @@ export class ChatPanel extends EventEmitter {
               "selectPaintTool",
               {},
               this.registeredFunctionHandlers["selectPaintTool"],
+            );
+            return true;
+          case "updatePaintToolSettings":
+            await this.toolCall(
+              "updatePaintToolSettings",
+              functionCall.args,
+              () =>
+                this.registeredFunctionHandlers["updatePaintToolSettings"](
+                  functionCall.args || {},
+                ),
             );
             return true;
           case "selectResizeCanvasTool":

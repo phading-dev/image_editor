@@ -863,6 +863,28 @@ export class Editor {
       .setSelectPolygonalMaskSelectionToolHandler(() => {
         this.mainCanvasPanel.selectPolygonalMaskSelectionTool();
       })
+      .setSelectFuzzyMaskSelectionToolHandler(() => {
+        this.mainCanvasPanel.selectFuzzyMaskSelectionTool();
+      })
+      .setUpdateFuzzyMaskSelectionToolSettingsHandler(
+        (settings: {
+          tolerance?: number;
+          contiguous?: boolean;
+          sampleAllLayers?: boolean;
+        }) => {
+          const fuzzySettings =
+            this.project.metadata.settings.fuzzyMaskSelectionToolSettings;
+          if (settings.tolerance !== undefined) {
+            fuzzySettings.tolerance = settings.tolerance;
+          }
+          if (settings.contiguous !== undefined) {
+            fuzzySettings.contiguous = settings.contiguous;
+          }
+          if (settings.sampleAllLayers !== undefined) {
+            fuzzySettings.sampleAllLayers = settings.sampleAllLayers;
+          }
+        },
+      )
       .setClearSelectionMaskHandler(() => {
         this.commandHistoryManager.pushCommand(
           new ClearSelectionMaskCommand(
@@ -904,22 +926,15 @@ export class Editor {
         const layer = this.project.metadata.layers.find(
           (layer) => layer.id === this.layersPanel.activeLayerId,
         );
-        const layerCanvas = this.project.layersToCanvas.get(layer.id);
-        // Rasterize the layer with all transforms, opacity, and shadow
         const tempCanvas = rasterizeLayerToCanvas(
           layer,
-          layerCanvas,
+          this.project.layersToCanvas.get(layer.id),
           this.project.metadata.width,
           this.project.metadata.height,
         );
-        const tempCtx = tempCanvas.getContext("2d");
-        // Extract alpha channel from rasterized result
-        const imageData = tempCtx.getImageData(
-          0,
-          0,
-          tempCanvas.width,
-          tempCanvas.height,
-        );
+        const imageData = tempCanvas
+          .getContext("2d")
+          .getImageData(0, 0, tempCanvas.width, tempCanvas.height);
         const mask = new ImageData(tempCanvas.width, tempCanvas.height);
         for (let i = 0; i < imageData.data.length; i += 4) {
           const alpha = imageData.data[i + 3];
@@ -953,7 +968,14 @@ export class Editor {
         );
       })
       .setSelectPaintToolHandler(() => {
+        console.log("Selecting paint tool");
         this.mainCanvasPanel.selectPaintTool();
+      })
+      .setUpdatePaintToolSettingsHandler((settings: { brushSize?: number }) => {
+        const paintSettings = this.project.metadata.settings.paintToolSettings;
+        if (settings.brushSize !== undefined) {
+          paintSettings.brushSize = settings.brushSize;
+        }
       })
       .setSelectResizeCanvasToolHandler(() => {
         this.mainCanvasPanel.selectResizeCanvasTool();
@@ -1051,8 +1073,10 @@ export class Editor {
           const newShadow = {
             color: shadow.color ?? baseShadow.color,
             blur: shadow.blur ?? Math.round(baseShadow.blur * 100) / 100,
-            offsetX: shadow.offsetX ?? Math.round(baseShadow.offsetX * 100) / 100,
-            offsetY: shadow.offsetY ?? Math.round(baseShadow.offsetY * 100) / 100,
+            offsetX:
+              shadow.offsetX ?? Math.round(baseShadow.offsetX * 100) / 100,
+            offsetY:
+              shadow.offsetY ?? Math.round(baseShadow.offsetY * 100) / 100,
           };
           this.commandHistoryManager.pushCommand(
             new UpdateLayerShadowCommand(

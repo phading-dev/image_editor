@@ -101,6 +101,18 @@
       type: number
       index: 1
 - kind: Message
+  name: FuzzyMaskSelectionToolSettings
+  fields:
+    - name: tolerance
+      type: number
+      index: 1
+    - name: contiguous
+      type: boolean
+      index: 2
+    - name: sampleAllLayers
+      type: boolean
+      index: 3
+- kind: Message
   name: ProjectSettings
   fields:
     - name: foregroundColor
@@ -112,6 +124,9 @@
     - name: paintToolSettings
       type: PaintToolSettings
       index: 3
+    - name: fuzzyMaskSelectionToolSettings
+      type: FuzzyMaskSelectionToolSettings
+      index: 4
 - kind: Message
   name: ProjectMetadata
   fields:
