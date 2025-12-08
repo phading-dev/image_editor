@@ -321,9 +321,9 @@ export class LayersPanel extends EventEmitter {
   }
 
   public moveLayerRowBefore(layerId: string, beforeLayerId?: string): void {
-    let oldRow = this.layerRows.get(layerId);
-    let newRow = beforeLayerId ? this.layerRows.get(beforeLayerId) : undefined;
-    this.listContainer.insertBefore(oldRow.element, newRow?.element);
+    let targetRow = this.layerRows.get(layerId);
+    let beforeRow = beforeLayerId ? this.layerRows.get(beforeLayerId) : undefined;
+    this.listContainer.insertBefore(targetRow.element, beforeRow?.element);
   }
 
   public rerenderLayerRow(layerId: string): void {

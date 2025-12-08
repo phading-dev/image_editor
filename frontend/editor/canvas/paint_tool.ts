@@ -19,7 +19,6 @@ export class PaintTool {
     ) => void,
     private readonly warning: (message: string) => void,
   ) {
-    console.log("Paint tool initialized");
     this.canvas.style.cursor = "crosshair";
     this.canvas.addEventListener("pointerdown", this.handlePointerDown);
     this.canvas.addEventListener("pointermove", this.handlePointerMove);

@@ -48,12 +48,9 @@ export class DeleteLayerCommand implements Command {
     }
     this.mainCanvasPanel.rerender();
     this.layersPanel.addLayerRow(this.layerToDelete);
-    if (this.layerIndex >= this.project.metadata.layers.length - 1) {
-      return;
-    }
     this.layersPanel.moveLayerRowBefore(
       this.layerToDelete.id,
-      this.project.metadata.layers[this.layerIndex].id,
+      this.project.metadata.layers[this.layerIndex + 1]?.id,
     );
   }
 }

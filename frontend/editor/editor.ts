@@ -9,6 +9,7 @@ import { ClearSelectionMaskCommand } from "./commands/clear_selection_mask_comma
 import { CombineSelectionMaskCommand } from "./commands/combine_selection_mask_command";
 import { CropLayerCommand } from "./commands/crop_layer_command";
 import { DeleteLayerCommand } from "./commands/delete_layer_command";
+import { DeleteMaskedAreaCommand } from "./commands/delete_masked_area_command";
 import { DuplicateLayerCommand } from "./commands/duplicate_layer_command";
 import { EditTextCommand } from "./commands/edit_text_command";
 import { FeatherSelectionMaskCommand } from "./commands/feather_selection_mask_command";
@@ -19,6 +20,7 @@ import { LockLayersCommand } from "./commands/lock_layers_command";
 import { MoveLayersCommand } from "./commands/move_layers_command";
 import { PaintCommand } from "./commands/paint_command";
 import { RasterizeTextLayerCommand } from "./commands/rasterize_text_layer_command";
+import { RasterizeLayerCommand } from "./commands/rasterize_layer_command";
 import { RenameLayerCommand } from "./commands/rename_layer_command";
 import { ReorderLayerCommand } from "./commands/reorder_layer_command";
 import { ResizeCanvasCommand } from "./commands/resize_canvas_command";
@@ -410,14 +412,14 @@ export class Editor {
         this.commandHistoryManager.undo();
         this.chatPanel.appendMessage({
           role: "system",
-          parts: [{ text: "Command undone." }],
+          parts: [{ text: "System: Command undone. No action needed." }],
         });
       })
       .setRedoHandler(() => {
         this.commandHistoryManager.redo();
         this.chatPanel.appendMessage({
           role: "system",
-          parts: [{ text: "Command redone." }],
+          parts: [{ text: "System: Command redone. No action needed." }],
         });
       })
       .setAddNewLayerHandler(() => {
@@ -967,6 +969,38 @@ export class Editor {
           ),
         );
       })
+      .setDeleteMaskedAreaHandler(() => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer.");
+        }
+        if (this.selectionMask.isEmpty()) {
+          throw new Error("No selection to delete.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        if (layer.locked) {
+          throw new Error("Active layer is locked.");
+        }
+        if (layer.basicText) {
+          throw new Error(
+            "Cannot delete selection from a text layer. Please rasterize it first.",
+          );
+        }
+        const context = this.project.layersToCanvas
+          .get(layer.id)
+          .getContext("2d");
+        this.commandHistoryManager.pushCommand(
+          new DeleteMaskedAreaCommand(
+            context,
+            layer.width,
+            layer.height,
+            layer.transform,
+            this.selectionMask.mask,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
       .setSelectPaintToolHandler(() => {
         console.log("Selecting paint tool");
         this.mainCanvasPanel.selectPaintTool();
@@ -1025,7 +1059,7 @@ export class Editor {
         }
         this.mainCanvasPanel.selectTextEditTool();
       })
-      .setRasterizeActiveLayerHandler(() => {
+      .setRasterizeActiveTextLayerHandler(() => {
         if (!this.layersPanel.activeLayerId) {
           throw new Error("No active layer to rasterize.");
         }
@@ -1040,6 +1074,25 @@ export class Editor {
         }
         this.commandHistoryManager.pushCommand(
           new RasterizeTextLayerCommand(
+            this.project,
+            layer,
+            this.mainCanvasPanel,
+            this.layersPanel,
+          ),
+        );
+      })
+      .setRasterizeActiveLayerHandler(() => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to rasterize.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        if (layer.locked) {
+          throw new Error("Active layer is locked and cannot be rasterized.");
+        }
+        this.commandHistoryManager.pushCommand(
+          new RasterizeLayerCommand(
             this.project,
             layer,
             this.mainCanvasPanel,

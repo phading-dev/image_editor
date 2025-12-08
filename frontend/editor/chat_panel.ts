@@ -22,14 +22,14 @@ const DISPLAY_ROLES = ["user", "error", "warning", "modelResponse"];
 
 interface ChatMessage {
   role:
-    | "user"
-    | "error"
-    | "warning"
-    | "assistant"
-    | "system"
-    | "modelResponse"
-    | "functionCall"
-    | "functionResponse";
+  | "user"
+  | "error"
+  | "warning"
+  | "assistant"
+  | "system"
+  | "modelResponse"
+  | "functionCall"
+  | "functionResponse";
   parts: any[];
 }
 
@@ -670,6 +670,11 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setDeleteMaskedAreaHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["deleteMaskedArea"] = handler;
+    return this;
+  }
+
   public setSelectPaintToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectPaintTool"] = handler;
     return this;
@@ -713,6 +718,11 @@ export class ChatPanel extends EventEmitter {
     }) => void,
   ): this {
     this.registeredFunctionHandlers["updateActiveLayerBasicText"] = handler;
+    return this;
+  }
+
+  public setRasterizeActiveTextLayerHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["rasterizeActiveTextLayer"] = handler;
     return this;
   }
 
@@ -1208,6 +1218,11 @@ export class ChatPanel extends EventEmitter {
                   },
                 },
                 {
+                  name: "deleteMaskedArea",
+                  description:
+                    "Delete (make transparent) the pixels within the current selection mask on the active layer. For best results on layers with transforms (rotation, scaling), suggest rasterizing the layer first.",
+                },
+                {
                   name: "selectPaintTool",
                   description:
                     "Switch to the paint/brush tool for drawing on the active layer.",
@@ -1317,9 +1332,14 @@ export class ChatPanel extends EventEmitter {
                   },
                 },
                 {
+                  name: "rasterizeActiveTextLayer",
+                  description:
+                    "Rasterize the currently active text layer, converting it into an image layer. This action is irreversible (except via undo) and the text will no longer be editable as text. Note: This does NOT bake in transforms. Use rasterizeActiveLayer if the user wants to bake in transforms as well.",
+                },
+                {
                   name: "rasterizeActiveLayer",
                   description:
-                    "Rasterize the currently active text layer, converting it into an image layer. This action is irreversible (except via undo) and the text will no longer be editable as text.",
+                    "Rasterize the currently active layer (text or image), baking in all transforms (rotation, scaling, translation), opacity, and shadow effects. The layer will be resized to match the project canvas dimensions with identity transform. Use this when the user wants to flatten transforms or prepare a layer for pixel-level operations on transformed content.",
                 },
                 {
                   name: "updateActiveLayerShadow",
@@ -1682,7 +1702,7 @@ export class ChatPanel extends EventEmitter {
               "selectRectangleMaskSelectionTool",
               {},
               this.registeredFunctionHandlers[
-                "selectRectangleMaskSelectionTool"
+              "selectRectangleMaskSelectionTool"
               ],
             );
             return true;
@@ -1705,7 +1725,7 @@ export class ChatPanel extends EventEmitter {
               "selectPolygonalMaskSelectionTool",
               {},
               this.registeredFunctionHandlers[
-                "selectPolygonalMaskSelectionTool"
+              "selectPolygonalMaskSelectionTool"
               ],
             );
             return true;
@@ -1775,6 +1795,13 @@ export class ChatPanel extends EventEmitter {
               );
             });
             return true;
+          case "deleteMaskedArea":
+            await this.toolCall(
+              "deleteMaskedArea",
+              {},
+              this.registeredFunctionHandlers["deleteMaskedArea"],
+            );
+            return true;
           case "cropActiveLayer":
             await this.toolCall("cropActiveLayer", functionCall.args, () =>
               this.registeredFunctionHandlers["cropActiveLayer"](
@@ -1831,6 +1858,13 @@ export class ChatPanel extends EventEmitter {
                 this.registeredFunctionHandlers["updateActiveLayerBasicText"](
                   functionCall.args,
                 ),
+            );
+            return true;
+          case "rasterizeActiveTextLayer":
+            await this.toolCall(
+              "rasterizeActiveTextLayer",
+              {},
+              this.registeredFunctionHandlers["rasterizeActiveTextLayer"],
             );
             return true;
           case "rasterizeActiveLayer":
