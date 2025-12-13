@@ -112,17 +112,18 @@ export class ChatPanel extends EventEmitter {
           placeholder: "Ask me anything...",
           style: [
             "width:100%",
-            `background-color:transparent`,
+            `background-color:${COLOR_THEME.neutral4}`,
             `color:${COLOR_THEME.neutral0}`,
             `border:0.0625rem solid ${COLOR_THEME.neutral2}`,
-            "border-radius:0.625rem",
-            "padding:0.625rem 2.5rem 0.625rem 0.625rem",
+            "border-radius:0.75rem",
+            "padding:0.75rem 2.75rem 0.75rem 0.875rem",
             "resize:vertical",
             `font-size:${FONT_M}rem`,
             "line-height:1.4",
             "outline:none",
             "overflow:hidden",
             "box-sizing:border-box",
+            "box-shadow:0 1px 3px rgba(0,0,0,0.08)",
           ].join(";"),
         }),
         E.button(
@@ -318,30 +319,51 @@ export class ChatPanel extends EventEmitter {
     }
 
     if (DISPLAY_ROLES.includes(message.role)) {
+      // Determine slide direction based on message role
+      let isUserMessage = message.role === "user";
+      let slideX = isUserMessage ? "1rem" : "-1rem";
+
       let item = E.div(
         {
           class: `chat-panel__message chat-panel__message--${message.role}`,
           style: [
-            "border-radius:0.625rem",
+            "border-radius:1rem",
             "white-space:pre-wrap",
             "word-break:break-word",
             `color:${COLOR_THEME.neutral0}`,
             `font-size:${FONT_M}rem`,
-            "line-height:1.5",
+            "line-height:1.6",
+            "padding:0.625rem 0.875rem",
+            "max-width:90%",
+            `background-color:${COLOR_THEME.neutral3}`,
+            `align-self:flex-start`,
+            `border-bottom-left-radius:0.25rem`,
+            // Initial state for animation
+            "opacity:0",
+            `transform:translateX(${slideX})`,
+            "transition:opacity 200ms ease-out, transform 200ms ease-out",
           ].join(";"),
         },
         E.text(message.parts.map((part: any) => part.text).join("")),
       );
-      if (message.role === "user") {
+      if (isUserMessage) {
         item.style.alignSelf = "flex-end";
-        item.style.padding = "0.5rem 0.75rem";
-        item.style.backgroundColor = COLOR_THEME.neutral3;
+        item.style.backgroundColor = COLOR_THEME.accent0;
+        item.style.color = COLOR_THEME.neutralContrast0;
+        item.style.borderBottomRightRadius = "0.25rem";
+        item.style.borderBottomLeftRadius = "1rem";
       } else if (message.role === "error") {
-        item.style.padding = "0.5rem 0.75rem";
-        item.style.backgroundColor = COLOR_THEME.error3;
+        item.style.backgroundColor = COLOR_THEME.error0;
+        item.style.color = COLOR_THEME.neutralContrast0;
       }
       this.historyContainer.append(item);
       this.historyContainer.scrollTop = this.historyContainer.scrollHeight;
+
+      // Trigger animation after element is in DOM
+      requestAnimationFrame(() => {
+        item.style.opacity = "1";
+        item.style.transform = "translateX(0)";
+      });
     }
   }
 

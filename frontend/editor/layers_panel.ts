@@ -1,10 +1,76 @@
 import EventEmitter = require("events");
 import { COLOR_THEME } from "../color_theme";
-import { FONT_S } from "../sizes";
+import { FONT_S, ICON_S, ICON_M } from "../sizes";
 import { Project } from "./project";
 import { Layer } from "./project_metadata";
 import { E } from "@selfage/element/factory";
 import { Ref } from "@selfage/ref";
+
+function createVisibleIcon(): SVGSVGElement {
+  return E.svg(
+    {
+      style: `width: ${ICON_M}rem; height: ${ICON_M}rem`,
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+    },
+    E.path({ d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" }),
+    E.circle({ cx: "12", cy: "12", r: "3" }),
+  );
+}
+
+function createHiddenIcon(): SVGSVGElement {
+  return E.svg(
+    {
+      style: `width: ${ICON_M}rem; height: ${ICON_M}rem`,
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+    },
+    E.path({
+      d: "M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24",
+    }),
+    E.line({ x1: "1", y1: "1", x2: "23", y2: "23" }),
+  );
+}
+
+function createLockedIcon(): SVGSVGElement {
+  return E.svg(
+    {
+      style: `width: ${ICON_S}rem; height: ${ICON_S}rem`,
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+    },
+    E.rect({ x: "3", y: "11", width: "18", height: "11", rx: "2", ry: "2" }),
+    E.path({ d: "M7 11V7a5 5 0 0 1 10 0v4" }),
+  );
+}
+
+function createUnlockedIcon(): SVGSVGElement {
+  return E.svg(
+    {
+      style: `width: ${ICON_S}rem; height: ${ICON_S}rem`,
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+    },
+    E.rect({ x: "3", y: "11", width: "18", height: "11", rx: "2", ry: "2" }),
+    E.path({ d: "M7 11V7a5 5 0 0 1 9.9-1" }),
+  );
+}
 
 export interface LayerRowClickEvent {
   id: string;
@@ -30,6 +96,7 @@ export class LayerRow extends EventEmitter {
   private visibleSpan: HTMLSpanElement;
   private opacitySpan: HTMLSpanElement;
   private lockedSpan: HTMLSpanElement;
+  private isSelected: boolean = false;
 
   public constructor(private layer: Layer) {
     super();
@@ -43,13 +110,14 @@ export class LayerRow extends EventEmitter {
     this.element = E.div(
       {
         style: [
-          "padding:0.5rem 1rem",
+          "padding:0.625rem 1rem",
           "display:flex",
           "align-items:center",
           "gap:0.5rem",
           `border-bottom:0.0625rem solid ${COLOR_THEME.neutral3}`,
           "background:transparent",
           "cursor:pointer",
+          "transition:background-color 150ms ease",
         ].join(";"),
       },
       E.div(
@@ -77,7 +145,7 @@ export class LayerRow extends EventEmitter {
           style: [
             `font-size:${FONT_S * 0.85}rem`,
             `background:${COLOR_THEME.accent3}`,
-            `color:${COLOR_THEME.neutral0}`,
+            `color:${COLOR_THEME.neutralContrast0}`,
             "padding:0.125rem 0.375rem",
             "border-radius:0.375rem",
             "white-space:nowrap",
@@ -89,42 +157,51 @@ export class LayerRow extends EventEmitter {
           style: [
             "display:flex",
             "align-items:center",
-            "gap:0.25rem",
+            "gap:0.375rem",
             "flex-wrap:wrap",
             "justify-content:flex-end",
           ].join(";"),
         },
         E.span({
           ref: visibleSpanRef,
+          title: "Toggle visibility",
           style: [
-            `font-size:${FONT_S * 0.85}rem`,
-            `background:${COLOR_THEME.neutral3}`,
-            `color:${COLOR_THEME.neutral0}`,
-            "padding:0.125rem 0.375rem",
+            `font-size:${FONT_S}rem`,
+            `color:${COLOR_THEME.neutral1}`,
+            "padding:0.25rem",
             "border-radius:0.375rem",
-            "white-space:nowrap",
+            "cursor:pointer",
+            "display:flex",
+            "align-items:center",
+            "justify-content:center",
           ].join(";"),
         }),
         E.span({
           ref: opacitySpanRef,
+          title: "Adjust opacity",
           style: [
             `font-size:${FONT_S * 0.85}rem`,
-            `background:${COLOR_THEME.neutral3}`,
-            `color:${COLOR_THEME.neutral0}`,
+            `color:${COLOR_THEME.neutral1}`,
             "padding:0.125rem 0.375rem",
             "border-radius:0.375rem",
             "white-space:nowrap",
+            "cursor:pointer",
+            "min-width:2.5rem",
+            "text-align:center",
           ].join(";"),
         }),
         E.span({
           ref: lockedSpanRef,
+          title: "Toggle lock",
           style: [
-            `font-size:${FONT_S * 0.85}rem`,
-            `background:${COLOR_THEME.neutral3}`,
-            `color:${COLOR_THEME.neutral0}`,
-            "padding:0.125rem 0.375rem",
+            `font-size:${FONT_S}rem`,
+            `color:${COLOR_THEME.neutral1}`,
+            "padding:0.25rem",
             "border-radius:0.375rem",
-            "white-space:nowrap",
+            "cursor:pointer",
+            "display:flex",
+            "align-items:center",
+            "justify-content:center",
           ].join(";"),
         }),
       ),
@@ -143,6 +220,17 @@ export class LayerRow extends EventEmitter {
         shiftKey: event.shiftKey,
       });
     });
+    // Hover effects
+    this.element.addEventListener("mouseenter", () => {
+      if (!this.isSelected) {
+        this.element.style.background = COLOR_THEME.neutral3;
+      }
+    });
+    this.element.addEventListener("mouseleave", () => {
+      if (!this.isSelected) {
+        this.element.style.background = "transparent";
+      }
+    });
     this.element.addEventListener("dragstart", (event) => {
       this.emit("dragstart", event);
     });
@@ -155,13 +243,16 @@ export class LayerRow extends EventEmitter {
     this.element.addEventListener("dragend", (event) => {
       this.emit("dragend", event);
     });
-    this.visibleSpan.addEventListener("click", () => {
+    this.visibleSpan.addEventListener("click", (event) => {
+      event.stopPropagation();
       this.emit("toggleVisibility", this.id);
     });
-    this.opacitySpan.addEventListener("click", () => {
+    this.opacitySpan.addEventListener("click", (event) => {
+      event.stopPropagation();
       this.emit("updateOpacity", this.id);
     });
-    this.lockedSpan.addEventListener("click", () => {
+    this.lockedSpan.addEventListener("click", (event) => {
+      event.stopPropagation();
       this.emit("toggleLock", this.id);
     });
   }
@@ -169,17 +260,29 @@ export class LayerRow extends EventEmitter {
   public rerender(): void {
     this.nameSpan.textContent = this.layer.name;
     if (this.layer.basicText) {
-      this.typeSpan.textContent = "Text";
+      this.typeSpan.textContent = "T";
       this.typeSpan.style.display = "";
     } else {
       this.typeSpan.style.display = "none";
     }
-    this.visibleSpan.textContent = this.layer.visible ? "Visible" : "Hidden";
+    // Eye icon for visibility
+    this.visibleSpan.replaceChildren(
+      this.layer.visible ? createVisibleIcon() : createHiddenIcon(),
+    );
+    this.visibleSpan.style.opacity = this.layer.visible ? "1" : "0.5";
+    // Opacity percentage
     this.opacitySpan.textContent = `${Math.round(this.layer.opacity)}%`;
-    this.lockedSpan.textContent = this.layer.locked ? "Locked" : "Unlocked";
+    // Lock icon
+    this.lockedSpan.replaceChildren(
+      this.layer.locked ? createLockedIcon() : createUnlockedIcon(),
+    );
+    this.lockedSpan.style.color = this.layer.locked
+      ? COLOR_THEME.accent0
+      : COLOR_THEME.neutral1;
   }
 
   public setSelected(selected: boolean): this {
+    this.isSelected = selected;
     this.element.style.background = selected
       ? COLOR_THEME.neutral3
       : "transparent";
@@ -244,12 +347,13 @@ export class LayersPanel extends EventEmitter {
       E.div(
         {
           style: [
-            "padding:0 1rem",
+            "padding:0.25rem 1rem 0.5rem 1rem",
             `font-size:${FONT_S}rem`,
-            "font-weight:600",
-            "letter-spacing:0.02em",
+            "font-weight:700",
+            "letter-spacing:0.05em",
             "text-transform:uppercase",
-            `color:${COLOR_THEME.neutral1}`,
+            `color:${COLOR_THEME.neutral0}`,
+            `border-bottom:0.0625rem solid ${COLOR_THEME.neutral3}`,
           ].join(";"),
         },
         E.text("Layers"),
