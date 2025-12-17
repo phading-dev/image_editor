@@ -5,6 +5,7 @@ import { CommandHistoryManager } from "./command_history_manager";
 import { AddImageLayerCommand } from "./commands/add_image_layer_command";
 import { AddLayerCommand } from "./commands/add_layer_command";
 import { AddTextLayerCommand } from "./commands/add_text_layer_command";
+import { BucketFillCommand } from "./commands/bucket_fill_command";
 import { ClearSelectionMaskCommand } from "./commands/clear_selection_mask_command";
 import { CombineSelectionMaskCommand } from "./commands/combine_selection_mask_command";
 import { CropLayerCommand } from "./commands/crop_layer_command";
@@ -997,6 +998,39 @@ export class Editor {
             layer.height,
             layer.transform,
             this.selectionMask.mask,
+            this.mainCanvasPanel,
+          ),
+        );
+      })
+      .setBucketFillHandler(() => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        if (layer.locked) {
+          throw new Error("Active layer is locked.");
+        }
+        if (layer.basicText) {
+          throw new Error(
+            "Cannot fill a text layer. Please rasterize it first.",
+          );
+        }
+        const context = this.project.layersToCanvas
+          .get(layer.id)
+          .getContext("2d");
+        const mask = this.selectionMask.isEmpty()
+          ? undefined
+          : this.selectionMask.mask;
+        this.commandHistoryManager.pushCommand(
+          new BucketFillCommand(
+            context,
+            layer.width,
+            layer.height,
+            layer.transform,
+            this.project.metadata.settings.foregroundColor,
+            mask,
             this.mainCanvasPanel,
           ),
         );

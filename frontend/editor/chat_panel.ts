@@ -787,6 +787,11 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setBucketFillHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["bucketFill"] = handler;
+    return this;
+  }
+
   private async generateContent(): Promise<void> {
     while (true) {
       let response = await this.serviceClient.send(
@@ -1255,6 +1260,11 @@ export class ChatPanel extends EventEmitter {
                   name: "deleteMaskedArea",
                   description:
                     "Delete (make transparent) the pixels within the current selection mask on the active layer. For best results on layers with transforms (rotation, scaling), suggest rasterizing the layer first.",
+                },
+                {
+                  name: "bucketFill",
+                  description:
+                    "Fill the active layer with the foreground color. If a selection mask exists, only the selected area is filled (with partial transparency preserved for feathered selections). If no selection mask, the entire layer canvas is filled. Does not work on text layers.",
                 },
                 {
                   name: "selectPaintTool",
@@ -1853,6 +1863,13 @@ export class ChatPanel extends EventEmitter {
               "deleteMaskedArea",
               {},
               this.registeredFunctionHandlers["deleteMaskedArea"],
+            );
+            return true;
+          case "bucketFill":
+            await this.toolCall(
+              "bucketFill",
+              {},
+              this.registeredFunctionHandlers["bucketFill"],
             );
             return true;
           case "cropActiveLayer":
