@@ -101,6 +101,12 @@
       type: number
       index: 1
 - kind: Message
+  name: EraseToolSettings
+  fields:
+    - name: brushSize
+      type: number
+      index: 1
+- kind: Message
   name: FuzzyMaskSelectionToolSettings
   fields:
     - name: tolerance
@@ -124,6 +130,9 @@
     - name: paintToolSettings
       type: PaintToolSettings
       index: 3
+    - name: eraseToolSettings
+      type: EraseToolSettings
+      index: 5
     - name: fuzzyMaskSelectionToolSettings
       type: FuzzyMaskSelectionToolSettings
       index: 4

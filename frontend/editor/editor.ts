@@ -1011,6 +1011,15 @@ export class Editor {
           paintSettings.brushSize = settings.brushSize;
         }
       })
+      .setSelectEraseToolHandler(() => {
+        this.mainCanvasPanel.selectEraseTool();
+      })
+      .setUpdateEraseToolSettingsHandler((settings: { brushSize?: number }) => {
+        const eraseSettings = this.project.metadata.settings.eraseToolSettings;
+        if (settings.brushSize !== undefined) {
+          eraseSettings.brushSize = settings.brushSize;
+        }
+      })
       .setSelectResizeCanvasToolHandler(() => {
         this.mainCanvasPanel.selectResizeCanvasTool();
       })

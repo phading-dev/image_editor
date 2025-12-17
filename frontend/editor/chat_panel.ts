@@ -709,6 +709,18 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setSelectEraseToolHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["selectEraseTool"] = handler;
+    return this;
+  }
+
+  public setUpdateEraseToolSettingsHandler(
+    handler: (settings: { brushSize?: number }) => void,
+  ): this {
+    this.registeredFunctionHandlers["updateEraseToolSettings"] = handler;
+    return this;
+  }
+
   public setSelectResizeCanvasToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectResizeCanvasTool"] = handler;
     return this;
@@ -1259,6 +1271,25 @@ export class ChatPanel extends EventEmitter {
                       brushSize: {
                         type: "number",
                         description: "The brush size in pixels.",
+                      },
+                    },
+                  },
+                },
+                {
+                  name: "selectEraseTool",
+                  description:
+                    "Switch to the erase tool for erasing pixels on the active layer. The eraser makes pixels transparent.",
+                },
+                {
+                  name: "updateEraseToolSettings",
+                  description:
+                    "Update the erase tool settings. All parameters are optional - if not provided, current values will be kept.",
+                  parameters: {
+                    type: "object",
+                    properties: {
+                      brushSize: {
+                        type: "number",
+                        description: "The eraser brush size in pixels.",
                       },
                     },
                   },
@@ -1844,6 +1875,23 @@ export class ChatPanel extends EventEmitter {
               functionCall.args,
               () =>
                 this.registeredFunctionHandlers["updatePaintToolSettings"](
+                  functionCall.args || {},
+                ),
+            );
+            return true;
+          case "selectEraseTool":
+            await this.toolCall(
+              "selectEraseTool",
+              {},
+              this.registeredFunctionHandlers["selectEraseTool"],
+            );
+            return true;
+          case "updateEraseToolSettings":
+            await this.toolCall(
+              "updateEraseToolSettings",
+              functionCall.args,
+              () =>
+                this.registeredFunctionHandlers["updateEraseToolSettings"](
                   functionCall.args || {},
                 ),
             );

@@ -185,6 +185,19 @@ export let PAINT_TOOL_SETTINGS: MessageDescriptor<PaintToolSettings> = {
   }],
 };
 
+export interface EraseToolSettings {
+  brushSize?: number,
+}
+
+export let ERASE_TOOL_SETTINGS: MessageDescriptor<EraseToolSettings> = {
+  name: 'EraseToolSettings',
+  fields: [{
+    name: 'brushSize',
+    index: 1,
+    primitiveType: PrimitiveType.NUMBER,
+  }],
+};
+
 export interface FuzzyMaskSelectionToolSettings {
   tolerance?: number,
   contiguous?: boolean,
@@ -213,6 +226,7 @@ export interface ProjectSettings {
   backgroundColor?: string,
   paintToolSettings?: PaintToolSettings,
   fuzzyMaskSelectionToolSettings?: FuzzyMaskSelectionToolSettings,
+  eraseToolSettings?: EraseToolSettings,
 }
 
 export let PROJECT_SETTINGS: MessageDescriptor<ProjectSettings> = {
@@ -233,6 +247,10 @@ export let PROJECT_SETTINGS: MessageDescriptor<ProjectSettings> = {
     name: 'fuzzyMaskSelectionToolSettings',
     index: 4,
     messageType: FUZZY_MASK_SELECTION_TOOL_SETTINGS,
+  }, {
+    name: 'eraseToolSettings',
+    index: 5,
+    messageType: ERASE_TOOL_SETTINGS,
   }],
 };
 

@@ -16,6 +16,7 @@ import { LassoMaskSelectionTool } from "./lasso_mask_selection_tool";
 import { MoveTool } from "./move_tool";
 import { OvalMaskSelectionTool } from "./oval_mask_selection_tool";
 import { PaintTool } from "./paint_tool";
+import { EraseTool } from "./erase_tool";
 import { PanTool } from "./pan_tool";
 import { PolygonalMaskSelectionTool } from "./polygonal_mask_selection_tool";
 import { RectangleMaskSelectionTool } from "./rectangle_mask_selection_tool";
@@ -116,6 +117,7 @@ export class MainCanvasPanel extends EventEmitter {
   private getActiveLayerId: () => string;
   private getSelectedLayerIds: () => Set<string>;
   private paintTool: PaintTool;
+  private eraseTool: EraseTool;
   private moveTool: MoveTool;
   private freeTransformTool: FreeTransformTool;
   private cropTool: CropTool;
@@ -675,6 +677,27 @@ export class MainCanvasPanel extends EventEmitter {
       () => {
         this.paintTool.remove();
         this.paintTool = undefined;
+      },
+    );
+  }
+
+  public selectEraseTool(): void {
+    this.toolSwitch.show(
+      () => {
+        this.eraseTool = new EraseTool(
+          this.canvas,
+          this.project.metadata.settings,
+          () => this.getActiveLayer(),
+          () => this.getActiveLayerContext(),
+          (context, oldImageData, newImageData) =>
+            this.emit("paint", context, oldImageData, newImageData),
+          (message: string) => this.emit("warning", message),
+        );
+        this.selectPreviousTool = () => this.selectEraseTool();
+      },
+      () => {
+        this.eraseTool.remove();
+        this.eraseTool = undefined;
       },
     );
   }
