@@ -55,6 +55,9 @@ export class ChatPanel extends EventEmitter {
   public readonly sendButton: HTMLButtonElement;
   private sending = false;
   private readonly chatHistory: Array<any> = [];
+  private readonly userInputHistory: Array<string> = [];
+  private userInputHistoryIndex = -1;
+  private tempInput = "";
   private readonly registeredFunctionHandlers: {
     [functionName: string]: (...args: any) => any;
   } = {};
@@ -182,6 +185,12 @@ export class ChatPanel extends EventEmitter {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         this.handleSend();
+      } else if (event.key === "ArrowUp") {
+        this.navigateInputHistory(1);
+        event.preventDefault();
+      } else if (event.key === "ArrowDown") {
+        this.navigateInputHistory(-1);
+        event.preventDefault();
       }
     });
     this.sendButton.addEventListener("click", () => {
@@ -287,6 +296,44 @@ export class ChatPanel extends EventEmitter {
     this.input.style.height = `${Math.max(this.input.scrollHeight / 16, FONT_M * 1.4 + 1.25 + 0.125)}rem`;
   }
 
+  private navigateInputHistory(direction: number): void {
+    if (this.userInputHistory.length === 0) {
+      return;
+    }
+
+    // Save current input when starting to navigate
+    if (this.userInputHistoryIndex === -1) {
+      this.tempInput = this.input.value;
+    }
+
+    const newIndex = this.userInputHistoryIndex + direction;
+
+    if (newIndex < -1) {
+      // Already at the newest, can't go further down
+      return;
+    }
+    if (newIndex >= this.userInputHistory.length) {
+      // Already at the oldest, can't go further up
+      return;
+    }
+
+    this.userInputHistoryIndex = newIndex;
+
+    if (this.userInputHistoryIndex === -1) {
+      // Back to current input
+      this.input.value = this.tempInput;
+    } else {
+      // Show history item (index 0 is most recent)
+      this.input.value =
+        this.userInputHistory[this.userInputHistoryIndex];
+    }
+
+    this.adjustInputHeight();
+    // Move cursor to end
+    this.input.selectionStart = this.input.value.length;
+    this.input.selectionEnd = this.input.value.length;
+  }
+
   public appendChatText(text: string): void {
     this.input.value += text;
     this.adjustInputHeight();
@@ -380,6 +427,16 @@ export class ChatPanel extends EventEmitter {
     if (!content || this.sending) {
       return;
     }
+
+    // Add to user input history (most recent first)
+    this.userInputHistory.unshift(content);
+    // Limit history size
+    if (this.userInputHistory.length > ChatPanel.MAX_HISTORY_LENGTH) {
+      this.userInputHistory.pop();
+    }
+    // Reset history navigation
+    this.userInputHistoryIndex = -1;
+    this.tempInput = "";
 
     this.appendMessage({
       role: "user",
