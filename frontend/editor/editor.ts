@@ -34,6 +34,7 @@ import { UpdateBasicTextCommand } from "./commands/update_basic_text_command";
 import { UpdateLayerShadowCommand } from "./commands/update_layer_shadow_command";
 import { rasterizeLayerToCanvas } from "./layer_rasterizer";
 import { LayersPanel } from "./layers_panel";
+import { Layer } from "./project_metadata";
 import { ColorPickerPopup } from "./popup/color_picker_popup";
 import { SliderPopup } from "./popup/slider_popup";
 import { Project } from "./project";
@@ -1035,6 +1036,104 @@ export class Editor {
           ),
         );
       })
+      .setPasteImageHandler(async () => {
+        try {
+          const clipboardItems = await navigator.clipboard.read();
+          for (const item of clipboardItems) {
+            const imageType = item.types.find((type) =>
+              type.startsWith("image/"),
+            );
+            if (imageType) {
+              const blob = await item.getType(imageType);
+              const image = await loadImage(blob);
+              const canvas = document.createElement("canvas");
+              canvas.width = image.naturalWidth;
+              canvas.height = image.naturalHeight;
+              const context = canvas.getContext("2d");
+              context.drawImage(image, 0, 0);
+
+              this.commandHistoryManager.pushCommand(
+                new AddImageLayerCommand(
+                  this.project,
+                  {
+                    id: crypto.randomUUID(),
+                    name: "Pasted Image",
+                    width: image.naturalWidth,
+                    height: image.naturalHeight,
+                    visible: true,
+                    opacity: 100,
+                    locked: false,
+                    transform: {
+                      rotation: 0,
+                      scaleX: 1,
+                      scaleY: 1,
+                      translateX: 0,
+                      translateY: 0,
+                    },
+                  },
+                  canvas,
+                  this.layersPanel,
+                  this.mainCanvasPanel,
+                ),
+              );
+              return;
+            }
+          }
+          throw new Error("No image data found in clipboard.");
+        } catch (error) {
+          if (error instanceof Error && error.name === "NotAllowedError") {
+            throw new Error(
+              "Clipboard access denied. Please allow clipboard access.",
+            );
+          }
+          throw error;
+        }
+      })
+      .setCopyMaskedAreaHandler(async () => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to copy from.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        const canvas = this.renderMaskedAreaToCanvas(layer);
+        await this.copyCanvasToClipboard(canvas);
+      })
+      .setCutMaskedAreaHandler(async () => {
+        if (!this.layersPanel.activeLayerId) {
+          throw new Error("No active layer to cut from.");
+        }
+        const layer = this.project.metadata.layers.find(
+          (layer) => layer.id === this.layersPanel.activeLayerId,
+        );
+        const canvas = this.renderMaskedAreaToCanvas(layer);
+        await this.copyCanvasToClipboard(canvas);
+
+        // Only delete if there's a mask and the layer is not locked and not a text layer
+        if (!this.selectionMask.isEmpty()) {
+          if (layer.locked) {
+            throw new Error("Active layer is locked. Copied but cannot delete.");
+          }
+          if (layer.basicText) {
+            throw new Error(
+              "Cannot cut from a text layer. Copied but cannot delete.",
+            );
+          }
+          const context = this.project.layersToCanvas
+            .get(layer.id)
+            .getContext("2d");
+          this.commandHistoryManager.pushCommand(
+            new DeleteMaskedAreaCommand(
+              context,
+              layer.width,
+              layer.height,
+              layer.transform,
+              this.selectionMask.mask,
+              this.mainCanvasPanel,
+            ),
+          );
+        }
+      })
       .setSelectPaintToolHandler(() => {
         console.log("Selecting paint tool");
         this.mainCanvasPanel.selectPaintTool();
@@ -1293,6 +1392,66 @@ export class Editor {
         this.colorPickerPopup = undefined;
       });
     this.element.append(this.colorPickerPopup.element);
+  }
+
+  private renderMaskedAreaToCanvas(layer: Layer): HTMLCanvasElement {
+    const canvasWidth = this.project.metadata.width;
+    const canvasHeight = this.project.metadata.height;
+
+    // Rasterize the layer to canvas coordinates
+    const rasterized = rasterizeLayerToCanvas(
+      layer,
+      this.project.layersToCanvas.get(layer.id),
+      canvasWidth,
+      canvasHeight,
+    );
+
+    // If no mask, return the full rasterized layer
+    if (this.selectionMask.isEmpty()) {
+      return rasterized;
+    }
+
+    // Apply mask to the rasterized layer
+    const ctx = rasterized.getContext("2d");
+    const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+    const mask = this.selectionMask.mask;
+
+    for (let y = 0; y < canvasHeight; y++) {
+      for (let x = 0; x < canvasWidth; x++) {
+        const pixelIndex = (y * canvasWidth + x) * 4;
+        const maskValue = mask.data[pixelIndex]; // R channel is mask value
+        const currentAlpha = imageData.data[pixelIndex + 3];
+        imageData.data[pixelIndex + 3] = Math.min(currentAlpha, maskValue);
+      }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    return rasterized;
+  }
+
+  private async copyCanvasToClipboard(canvas: HTMLCanvasElement): Promise<void> {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          reject(new Error("Failed to create image blob."));
+          return;
+        }
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ "image/png": blob }),
+          ]);
+          resolve();
+        } catch (error) {
+          if (error instanceof Error && error.name === "NotAllowedError") {
+            reject(
+              new Error("Clipboard access denied. Please allow clipboard access."),
+            );
+          } else {
+            reject(error);
+          }
+        }
+      }, "image/png");
+    });
   }
 
   public remove(): void {

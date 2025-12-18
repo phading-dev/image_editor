@@ -288,6 +288,33 @@ export class ChatPanel extends EventEmitter {
       event.preventDefault();
       this.registeredFunctionHandlers["zoomOut"]();
     }
+    // Handle Ctrl+Shift+V (paste image)
+    else if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key === "V" &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      this.registeredFunctionHandlers["pasteImage"]();
+    }
+    // Handle Ctrl+Shift+C (copy masked area)
+    else if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key === "C" &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      this.registeredFunctionHandlers["copyMaskedArea"]();
+    }
+    // Handle Ctrl+Shift+X (cut masked area)
+    else if (
+      (event.ctrlKey || event.metaKey) &&
+      event.key === "X" &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      this.registeredFunctionHandlers["cutMaskedArea"]();
+    }
   };
 
   private adjustInputHeight(): void {
@@ -324,8 +351,7 @@ export class ChatPanel extends EventEmitter {
       this.input.value = this.tempInput;
     } else {
       // Show history item (index 0 is most recent)
-      this.input.value =
-        this.userInputHistory[this.userInputHistoryIndex];
+      this.input.value = this.userInputHistory[this.userInputHistoryIndex];
     }
 
     this.adjustInputHeight();
@@ -754,6 +780,26 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
+  public setBucketFillHandler(handler: () => void): this {
+    this.registeredFunctionHandlers["bucketFill"] = handler;
+    return this;
+  }
+
+  public setPasteImageHandler(handler: () => Promise<void>): this {
+    this.registeredFunctionHandlers["pasteImage"] = handler;
+    return this;
+  }
+
+  public setCopyMaskedAreaHandler(handler: () => Promise<void>): this {
+    this.registeredFunctionHandlers["copyMaskedArea"] = handler;
+    return this;
+  }
+
+  public setCutMaskedAreaHandler(handler: () => Promise<void>): this {
+    this.registeredFunctionHandlers["cutMaskedArea"] = handler;
+    return this;
+  }
+
   public setSelectPaintToolHandler(handler: () => void): this {
     this.registeredFunctionHandlers["selectPaintTool"] = handler;
     return this;
@@ -844,11 +890,6 @@ export class ChatPanel extends EventEmitter {
     return this;
   }
 
-  public setBucketFillHandler(handler: () => void): this {
-    this.registeredFunctionHandlers["bucketFill"] = handler;
-    return this;
-  }
-
   private async generateContent(): Promise<void> {
     while (true) {
       let response = await this.serviceClient.send(
@@ -863,8 +904,6 @@ export class ChatPanel extends EventEmitter {
                   "Your role is to help users edit images by interpreting their requests and calling the appropriate functions.",
                   "The application has layers (like Photoshop), and users can work on an active (or current) layer and manage layers.",
                   "When users ask to perform actions, use the available functions to execute them.",
-                  "Shortcuts are available for: undo (Ctrl+Z), redo (Ctrl+Y or Ctrl+Shift+Z), save (Ctrl+S), open (Ctrl+O), zoom in (Ctrl+Plus), and zoom out (Ctrl+Minus).",
-                  "SelectTool is the default tool that can be selected by pressing ESC.",
                   "Multi-selecting layers can be done by holding down Shift while clicking on layers.",
                   "Panning the canvas can be done by holding down the Alt key and dragging the mouse.",
                   "Be concise and friendly in your responses.",
@@ -882,12 +921,12 @@ export class ChatPanel extends EventEmitter {
                 {
                   name: "saveProject",
                   description:
-                    "Save the current project to a zip file. A file picker may or may not appear depending on the browser.",
+                    "Save the current project to a zip file. A file picker may or may not appear depending on the browser. Shortcut: Ctrl+S.",
                 },
                 {
                   name: "loadProject",
                   description:
-                    "Launch a file picker to open a project from a zip file. A file may or may not be selected depending on the user.",
+                    "Launch a file picker to open a project from a zip file. A file may or may not be selected depending on the user. Shortcut: Ctrl+O.",
                 },
                 {
                   name: "newProject",
@@ -932,11 +971,11 @@ export class ChatPanel extends EventEmitter {
                 },
                 {
                   name: "undo",
-                  description: "Undo the last action.",
+                  description: "Undo the last action. Shortcut: Ctrl+Z.",
                 },
                 {
                   name: "redo",
-                  description: "Redo the last undone action.",
+                  description: "Redo the last undone action. Shortcut: Ctrl+Y or Ctrl+Shift+Z.",
                 },
                 {
                   name: "addNewLayer",
@@ -1038,11 +1077,11 @@ export class ChatPanel extends EventEmitter {
                 },
                 {
                   name: "zoomIn",
-                  description: "Zoom in the canvas view.",
+                  description: "Zoom in the canvas view. Shortcut: Ctrl+Plus.",
                 },
                 {
                   name: "zoomOut",
-                  description: "Zoom out the canvas view.",
+                  description: "Zoom out the canvas view. Shortcut: Ctrl+Minus.",
                 },
                 {
                   name: "setZoom",
@@ -1086,7 +1125,7 @@ export class ChatPanel extends EventEmitter {
                 {
                   name: "selectSelectTool",
                   description:
-                    "Switch to the select tool to select layers by clicking on them. Clicking on the same position will cycle through the layers at that position.",
+                    "Switch to the select tool to select layers by clicking on them. Clicking on the same position will cycle through the layers at that position. This is the default tool. Shortcut: ESC.",
                 },
                 {
                   name: "selectMoveTool",
@@ -1322,6 +1361,21 @@ export class ChatPanel extends EventEmitter {
                   name: "bucketFill",
                   description:
                     "Fill the active layer with the foreground color. If a selection mask exists, only the selected area is filled (with partial transparency preserved for feathered selections). If no selection mask, the entire layer canvas is filled. Does not work on text layers.",
+                },
+                {
+                  name: "pasteImage",
+                  description:
+                    "Paste image data from the clipboard as a new layer. The image will be added at the top of the layer stack. Shortcut: Ctrl+Shift+V.",
+                },
+                {
+                  name: "copyMaskedArea",
+                  description:
+                    "Copy the masked/selected area of the active layer to the clipboard. If no mask exists, copies the entire layer. The copied image includes the layer's transforms and opacity applied. Shortcut: Ctrl+Shift+C.",
+                },
+                {
+                  name: "cutMaskedArea",
+                  description:
+                    "Cut the masked/selected area of the active layer to the clipboard (copy then delete). If no mask exists, copies the entire layer but does not delete. Shortcut: Ctrl+Shift+X.",
                 },
                 {
                   name: "selectPaintTool",
@@ -1927,6 +1981,27 @@ export class ChatPanel extends EventEmitter {
               "bucketFill",
               {},
               this.registeredFunctionHandlers["bucketFill"],
+            );
+            return true;
+          case "pasteImage":
+            await this.toolCall(
+              "pasteImage",
+              {},
+              this.registeredFunctionHandlers["pasteImage"],
+            );
+            return true;
+          case "copyMaskedArea":
+            await this.toolCall(
+              "copyMaskedArea",
+              {},
+              this.registeredFunctionHandlers["copyMaskedArea"],
+            );
+            return true;
+          case "cutMaskedArea":
+            await this.toolCall(
+              "cutMaskedArea",
+              {},
+              this.registeredFunctionHandlers["cutMaskedArea"],
             );
             return true;
           case "cropActiveLayer":
